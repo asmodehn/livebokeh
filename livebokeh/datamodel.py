@@ -36,10 +36,10 @@ class DataModel:
                 # to prevent ValueError: Must stream updates to all existing columns (missing: level_0)
                 # streamable['index'] = convert_datetime_array(streamable['index'].to_numpy())
                 # to prevent error on timestamp
-                for r in self._rendered_datasources:  # TODO : link is gone, document is inside the rendered source...
+                for r in self._rendered_datasources:
                     if r.document is not None:
                         r.document.add_next_tick_callback(
-                            lambda: r.stream(streamable),  # stream delta values first
+                            lambda: r.stream(streamable),
                         )
 
         except Exception as e:
@@ -61,7 +61,6 @@ class DataModel:
                 for r in self._rendered_datasources:
                     if r.document is not None:
                         r.document.add_next_tick_callback(
-                            # full upate of previously instantiated sources
                             lambda: r.patch(patches)
                         )
         except Exception as e:
@@ -100,6 +99,7 @@ class DataModel:
         # This will trigger update of simple view, like datatable.
         # BUT it will NOT trigger redraw of the various plots, we rely on stream or patch for that.
         self._data = new_data
+        # Note this is necessary for further patches to work correctly and not get out of bounds.
         for rds in self._rendered_datasources:
             if rds.document is not None:
                 rds.document.add_next_tick_callback(
@@ -107,7 +107,7 @@ class DataModel:
                 )
 
     @property
-    def table(self):
+    def table(self) -> DataTable:  # TODO : Table is actually another kind of DataView...
         """ Simplest model to visually help debug interactive update.
             This does NOT require us to call stream or patch.
         """
@@ -116,7 +116,7 @@ class DataModel:
         ds = ColumnDataSource(data=self._data, name=f"{self._name}_tableview")
 
         # TODO: BUG ? somehow adding datatable's data source prevent patches to happen propery on plot ??
-        # self._rendered_datasources.append(ds)
+        self._rendered_datasources.append(ds)
 
         dt = DataTable(source=ds, columns=[
                                               TableColumn(field="index", title="index",
@@ -131,27 +131,16 @@ class DataModel:
     #     # Debug renderer
     #     return fig.line(x="index", y=y, color=color, source=self(name=f"{self._name}_as_{legend_label}"), legend_label=legend_label)
 
-    # TODO: multilines... various figures visualization + customization...
-    # def plot(self, palette=None):
-    #     fig = Figure(title="Random Test", plot_height=480,
-    #            tools='pan, xwheel_zoom, reset',
-    #            toolbar_location="left", y_axis_location="right",
-    #            x_axis_type='datetime', sizing_mode="scale_width")
-    #
-    #     palette = Spectral11[0:numlines] if palette is None else palette
-    #
-    #     fig.multi_line(x="index", y=c, color=, source = self(name=f"{self._name}[{c}]"), legend_label=c)
-
     """ class representing one viewplot - potentially rendered in multiple documents """
     def __init__(self, data: pandas.DataFrame, name:str, debug=True):
         self._debug = debug
         self._name = name
-        self._data = data
-        self._links = set()
+        self._data = data  # TODO : default on clock ticks
         self._rendered_datasources = list()
         # a set here is fine, it is never included in the bokeh document
 
     def __call__(self, name=None) -> ColumnDataSource:
+        """ To call everything that needs to be done on request (and not on init)"""
         # we need to rest the index just before rendering to bokeh
         # it is useful for stream and patches computation
         src = ColumnDataSource(data=self._data, name=self._name if name is None else name)  # Note: name is mostly for debugging help
@@ -215,8 +204,8 @@ if __name__ == '__main__':
         # dynamic datasource plots as simply as possible
         # ddsource1.line(fig=debug_fig, y="random1", color="blue", legend_label="Debug1")
         # TODO : enabling this DOES NOT work with table in rendered.both cannot be updated simultaneously ?
-        debug_fig.line(x="index", y="random1", color="blue", source=ddsource1("dynamic_line1"), legend_label="Debug1")
-        debug_fig.line(x="index", y="random2", color="red", source=ddsource2("static_line2"), legend_label="Debug2")
+        plot1 = debug_fig.line(x="index", y="random1", color="blue", source=ddsource1("dynamic_line1"), legend_label="Debug1")
+        plot2 = debug_fig.line(x="index", y="random2", color="red", source=ddsource2("static_line2"), legend_label="Debug2")
 
         # import inspect
         # for d, b in zip(dir(dynfig), dir(debug_fig)):
@@ -230,10 +219,11 @@ if __name__ == '__main__':
         # doc.theme = Theme(filename=os.path.join(os.path.dirname(__file__), "theme.yaml"))
 
         # quick and easy dynamic update
+        # Note : This works for multiple updates (not like the add_next_tick_callback)
         doc.add_periodic_callback(
             lambda: (
                 # replacing data in datasource directly trigger simple dynamic update in plots.
-                # setattr(ds1, 'data', ddsource1.data),
+                setattr(plot1.data_source, 'data', ddsource1.data),
                 # This is mandatory because the data update is not detected by the livedatasource
                 # setattr(plot2.data_source, 'data', ddsource2.data)
             ),

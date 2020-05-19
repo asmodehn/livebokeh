@@ -10,40 +10,29 @@ from bokeh.models import ColumnDataSource, DataTable, DateFormatter, Model, Tabl
 from bokeh.plotting import Figure
 
 
-class BokehLiveView:
+class DataView:
 
+    model: DataModel
     figure: Figure
 
-    def __init__(self, source: DataModel, **figure_kwargs):
+    def __init__(self, model: DataModel, **figure_kwargs):
+        self.model = model
         self.figure = Figure(**figure_kwargs)
-
-        palette = viridis(len(source.data.columns))
-        color_index = {c: palette[i] for i, c in enumerate(source.data.columns)}
-
-        for c in source.data.columns:
-            # TODO : maybe only pass the necessary column ?
-            self.figure.line(source=source(), x="index", y=c, color=color_index[c],)
 
     def __getitem__(self, item):
         return self.figure.renderers[item]
 
+    def __call__(self):
+        """ To call everything that needs to be done on request (and not on init)"""
+        palette = viridis(len(self.model.data.columns))
+        color_index = {c: palette[i] for i, c in enumerate(self.model.data.columns)}
 
-    #
-    #
-    # def __call__(self, doc):
-    #     """ to display the view in a bokeh document """
-    #     # We do all the usual bokeh calls here...
-    #
-    #     # create figure from args
-    #
-    #     #for each plot actually create renderers (they manage their own source)
-    #     for p in self.plots:
-    #         p(fig=fig)
-    #
-    #     # return the figure (as rendering of the view)
-    #     return fig
+        # by default : lines
+        for c in self.model.data.columns:
+            # TODO : maybe only pass the necessary column of source ? how about updates ??
+            self.figure.line(source=self.model(), x="index", y=c, color=color_index[c], )
 
-
+        return self.figure
 
 
 if __name__ == '__main__':
@@ -66,7 +55,7 @@ if __name__ == '__main__':
     ))
 
     # Note : This is "created" before a document output is known and before a request is sent to the server
-    view = BokehLiveView(source=ddsource1, title="Random Test", plot_height=480,
+    view = DataView(model=ddsource1, title="Random Test", plot_height=480,
                     tools='xpan, xwheel_zoom, reset',
                     toolbar_location="left", y_axis_location="right",
                     x_axis_type='datetime', sizing_mode="scale_width")
@@ -103,7 +92,7 @@ if __name__ == '__main__':
 
         doc.add_root(
             column(
-                row(view.figure, ddsource1.table),
+                row(view(), ddsource1.table),
             )
         )
         # doc.theme = Theme(filename=os.path.join(os.path.dirname(__file__), "theme.yaml"))
@@ -148,7 +137,9 @@ if __name__ == '__main__':
         await asyncio.sleep(3600)  # running for one hour.
         # TODO : scheduling restart (crontab ? cli params ?) -> GOAL: ensure resilience (erlang-style)
 
-    asyncio.run(main())
-
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Exiting...")
 
 
