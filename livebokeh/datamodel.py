@@ -127,9 +127,9 @@ class DataModel:
               width=320, height=480)
         return dt
 
-    def line(self, fig, y="random1", color="blue", legend_label="lineview"):
-        # Debug renderer
-        return fig.line(x="index", y=y, color=color, source=self(name=f"{self._name}_as_{legend_label}"), legend_label=legend_label)
+    # def line(self, fig, y="random1", color="blue", legend_label="lineview"):
+    #     # Debug renderer
+    #     return fig.line(x="index", y=y, color=color, source=self(name=f"{self._name}_as_{legend_label}"), legend_label=legend_label)
 
     # TODO: multilines... various figures visualization + customization...
     # def plot(self, palette=None):
@@ -213,9 +213,10 @@ if __name__ == '__main__':
                         x_axis_type='datetime', sizing_mode="scale_width")
 
         # dynamic datasource plots as simply as possible
-        ddsource1.line(fig=debug_fig, y="random1", color="blue", legend_label="Debug1")
-        # plot1 = debug_fig.line(x="index", y="random1", color="blue", source=ds1, legend_label="Debug1")
-        plot2 = debug_fig.line(x="index", y="random2", color="red", source=ddsource2("debug_static_line2"), legend_label="Debug2")
+        # ddsource1.line(fig=debug_fig, y="random1", color="blue", legend_label="Debug1")
+        # TODO : enabling this DOES NOT work with table in rendered.both cannot be updated simultaneously ?
+        debug_fig.line(x="index", y="random1", color="blue", source=ddsource1("dynamic_line1"), legend_label="Debug1")
+        debug_fig.line(x="index", y="random2", color="red", source=ddsource2("static_line2"), legend_label="Debug2")
 
         # import inspect
         # for d, b in zip(dir(dynfig), dir(debug_fig)):
