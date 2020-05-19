@@ -5,7 +5,7 @@ import pandas
 from bokeh.layouts import column, row
 from bokeh.palettes import viridis
 
-from aiokraken.domain.models.figures.ddbokeh import DDSharedDataSource
+from livebokeh.datamodel import DataModel
 from bokeh.models import ColumnDataSource, DataTable, DateFormatter, Model, TableColumn
 from bokeh.plotting import Figure
 
@@ -14,7 +14,7 @@ class BokehLiveView:
 
     figure: Figure
 
-    def __init__(self, source: DDSharedDataSource, **figure_kwargs):
+    def __init__(self, source: DataModel, **figure_kwargs):
         self.figure = Figure(**figure_kwargs)
 
         palette = viridis(len(source.data.columns))
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     # Note : This is "created" before a document output is known
     # and before a request is sent to the server
     start = datetime.now()
-    ddsource1 = DDSharedDataSource(name="ddsource1", data=pandas.DataFrame(data=[
+    ddsource1 = DataModel(name="ddsource1", data=pandas.DataFrame(data=[
             [random.randint(-10, 10), random.randint(-10, 10)],
             [random.randint(-10, 10), random.randint(-10, 10)],
         ],

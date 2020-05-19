@@ -18,7 +18,7 @@ from bokeh.document import without_document_lock
 DDLink = namedtuple("DDLink", ["source", "doc"])
 
 
-class DDSharedDataSource:
+class DataModel:
 
     _data: pandas.DataFrame
     _process: typing.List[typing.Callable]
@@ -174,10 +174,10 @@ if __name__ == '__main__':
     # Note : This is "created" before a document output is known
     # and before a request is sent to the server
     start = datetime.now()
-    ddsource1 = DDSharedDataSource(name="ddsource1", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random1"],
-                                                    index=[start, start+timedelta(milliseconds=1)]))
-    ddsource2 = DDSharedDataSource(name="ddsource2", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random2"],
-                                                    index=[start, start+timedelta(milliseconds=1)]))
+    ddsource1 = DataModel(name="ddsource1", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random1"],
+                                                                  index=[start, start+timedelta(milliseconds=1)]))
+    ddsource2 = DataModel(name="ddsource2", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random2"],
+                                                                  index=[start, start+timedelta(milliseconds=1)]))
     # Note we add some initial data to have bokeh center the plot properly on the time axis TODO : fix it !
 
     # Producer as a background task
@@ -264,8 +264,10 @@ if __name__ == '__main__':
         await asyncio.sleep(3600)  # running for one hour.
         # TODO : scheduling restart (crontab ? cli params ?) -> GOAL: ensure resilience (erlang-style)
 
-    asyncio.run(main())
-
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Exiting...")
 
 
 
