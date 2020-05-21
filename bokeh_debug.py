@@ -20,11 +20,21 @@ class Clock:
         self._cds.append(cds)
         return cds
 
+    @property
+    def table(self):  # a very simple view of the data.
+        src = self.source
+        # Note : index position is None, as that index (not a column) seems not usable in plots...)
+        table = DataTable(source=src, columns=[
+            TableColumn(field=f, title=f) for f in src.column_names
+        ], sortable=False, reorderable=False, index_position=None) #, width=320, height=480)
+        return table
+
     @staticmethod
-    def _clock2df(dt: datetime) -> pandas.DataFrame:
+    def _clock2df(dt: datetime, index: int = 0) -> pandas.DataFrame:
         return pandas.DataFrame(data=[
             [dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second,]
-        ], columns=["year", "month", "day", "hour", "minute", "second"]
+        ], columns=["year", "month", "day", "hour", "minute", "second"],
+        index=[index]  # useful to set a specific index for proper appending later on
         )
 
     def __init__(self):
@@ -33,19 +43,21 @@ class Clock:
         self._cds = list()
 
     async def __call__(self):
+        tick = 0
         while True:
             await asyncio.sleep(1)
-            dt = datetime.now()
-            update_df = self._clock2df(dt)
+            tick += 1
 
-            self.data.append(update_df)
+            dt = datetime.now()
+            update_df = self._clock2df(dt, index=tick)
+            self.data.append(update_df, verify_integrity=True)
 
             # attempt datadriven stream to view
             for c in self._cds:
                 if c.document is not None:
                     c.document.add_next_tick_callback(
-                        # lambda: c.stream(update_df)
-                        lambda: c.stream(update_df.reset_index().to_dict('series'))
+                        lambda cds=c: cds.stream(update_df)
+                        # lambda cds=c: cds.stream(update_df.reset_index().to_dict('series'))
                     )
 
 
@@ -69,31 +81,15 @@ if __name__ == '__main__':
         plot_secs = debug_fig.line(x="index", y="second", color="blue", source=clock.source, legend_label="Seconds")
         plot_mins = debug_fig.line(x="index", y="minute", color="red", source=clock.source, legend_label="Minutes")
 
-        table = DataTable(source=clock.source, columns=[
-            TableColumn(field=f, title=f) for f in clock.data.columns
-        ], width=320, height=480)
-
         doc.add_root(
                 # to help compare / visually debug
-                row(debug_fig, table)
+                row(debug_fig, clock.table)
         )
-
-        # quick and easy dynamic update
-        # doc.add_periodic_callback(
-        #     lambda: (
-        #         # replacing data in datasource directly trigger simple dynamic update in plots.
-        #         setattr(plot_secs.data_source, 'data', clock.data),
-        #         setattr(plot_mins.data_source, 'data', clock.data),
-        #         setattr(table.source, 'data', clock.data)
-        #     ),
-        #     period_milliseconds=1000
-        # )
-
 
     async def main():
 
         print(f"Starting Tornado Server...")
-        server = BokehServer({'/': test_page})  # iolopp must remain to none, num_procs must be default (1)
+        server = BokehServer({'/': test_page})  # ioloop must remain to none, num_procs must be default (1)
         server.start()
         # Note : the bkapp is run for each request to the url...
 
