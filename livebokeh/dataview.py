@@ -13,26 +13,28 @@ from bokeh.plotting import Figure
 class DataView:
 
     model: DataModel
-    figure: Figure
+    _figure_kwargs: typing.Dict
+
+    # TODO : some plot visualisation in terminal ...
 
     def __init__(self, model: DataModel, **figure_kwargs):
         self.model = model
-        self.figure = Figure(**figure_kwargs)
-
-    def __getitem__(self, item):
-        return self.figure.renderers[item]
+        self._figure_kwargs = figure_kwargs
 
     def __call__(self):
         """ To call everything that needs to be done on request (and not on init)"""
+
+        figure = Figure(**self._figure_kwargs)
+
         palette = viridis(len(self.model.data.columns))
         color_index = {c: palette[i] for i, c in enumerate(self.model.data.columns)}
 
         # by default : lines
         for c in self.model.data.columns:
             # TODO : maybe only pass the necessary column of source ? how about updates ??
-            self.figure.line(source=self.model(), x="index", y=c, color=color_index[c], )
+            figure.line(source=self.model.source, x="index", y=c, color=color_index[c], legend_label=c)
 
-        return self.figure
+        return figure
 
 
 if __name__ == '__main__':
@@ -80,11 +82,11 @@ if __name__ == '__main__':
 
             # push FULL data updates !
             # Note some derivative computation may require more than you think
-            ddsource1.data = pandas.DataFrame(
+            ddsource1(pandas.DataFrame(
                 columns=["random1", "random2"],
                 data = new_data,
                 index = tick
-            )
+            ))
 
             await asyncio.sleep(1)
 
@@ -92,50 +94,18 @@ if __name__ == '__main__':
 
         doc.add_root(
             column(
-                row(view(), ddsource1.table),
+                row(view(), ddsource1.table, view()),
             )
         )
-        # doc.theme = Theme(filename=os.path.join(os.path.dirname(__file__), "theme.yaml"))
-
-        # quick and easy dynamic update
-        # doc.add_periodic_callback(
-        #     lambda: (
-        #         # replacing data in datasource directly trigger simple dynamic update in plots.
-        #         setattr(d1.data_source, 'data', ddsource1.data),
-        #         setattr(d2.data_source, 'data', ddsource2.data),
-        #
-        #         setattr(debugdt.source, 'data', ddsource1.data),
-        #         setattr(debugdt.source, 'data', ddsource2.data),
-        #         # setattr(plot1.source, 'data', ddsource1.data),
-        #         # setattr(plot2.source, 'data', ddsource2.data),
-        #     ),
-        #     period_milliseconds=1000
-        # )
-
-    def start_tornado(bkapp):
-        # Server will take current running asyncio loop as his own.
-        server = BokehServer({'/': bkapp})  # iolopp must remain to none, num_procs must be default (1)
-        server.start()
-        return server
 
     async def main():
 
-        print(f"Starting Tornado Server...")
-        server = start_tornado(bkapp=test_page)
-        # Note : the bkapp is run for each request to the url...
-
-        # bg async task...TMP deactivate, DEBUG problem on first render
+        from livebokeh.monosrv import monosrv
+        # bg async task...
         asyncio.create_task(compute_random(-10, 10))
 
-        print('Serving Bokeh application on http://localhost:5006/')
-        # server.io_loop.add_callback(server.show, "/")
+        await monosrv({'/': test_page})
 
-        # THIS is already the loop that is currently running !!!
-        assert server.io_loop.asyncio_loop == asyncio.get_running_loop(), f"{server.io_loop.asyncio_loop} != {asyncio.get_running_loop()}"
-        # server.io_loop.start()  # DONT NEED !
-
-        await asyncio.sleep(3600)  # running for one hour.
-        # TODO : scheduling restart (crontab ? cli params ?) -> GOAL: ensure resilience (erlang-style)
 
     try:
         asyncio.run(main())

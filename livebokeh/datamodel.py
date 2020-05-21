@@ -17,7 +17,6 @@ from bokeh.util.serialization import convert_datetime_array, convert_datetime_ty
 class DataModel:
 
     _data: pandas.DataFrame
-    _process: typing.List[typing.Callable]
 
     _rendered_datasources: typing.List[ColumnDataSource]
     # REMINDER : document is a property of bokeh's datasource
@@ -182,7 +181,7 @@ if __name__ == '__main__':
                 index = tick
             ))
 
-            # Note : we can trigger only a stream update by calling with same data...
+            # Note : we can trigger only a stream update by calling with the same data + some appended...
             ddsource2(ddsource2.data.append(
                 pandas.DataFrame(data = {"random2": [random.randint(m, M)]}, index=[now])
             ))
@@ -206,20 +205,11 @@ if __name__ == '__main__':
         )
 
     async def main():
-
-        print(f"Starting Tornado Server...")
-        # Server will take current running asyncio loop as his own.
-        server = BokehServer({'/': test_page})  # iolopp must remain to none, num_procs must be default (1)
-        server.start()
-        # Note : test_page() is called for each request to the url...
-
+        from livebokeh.monosrv import monosrv
         # bg async task...
         asyncio.create_task(compute_random(-10, 10))
 
-        print('Serving Bokeh application on http://localhost:5006/')
-
-        await asyncio.sleep(3600)  # running for one hour.
-        # TODO : scheduling restart (crontab ? cli params ?) -> GOAL: ensure resilience (erlang-style)
+        await monosrv({'/': test_page})
 
     try:
         asyncio.run(main())
