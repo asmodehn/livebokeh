@@ -15,24 +15,26 @@ async def monosrv(applications: typing.Dict[str, typing.Callable[[Document], typ
     # Server will take current running asyncio loop as his own.
     server = BokehServer(applications=applications, io_loop=None, num_procs=1)
     # ioloop must remain to none, num_procs must be default (1)
+    # TODO : maybe better to explicitely set io_loop to current loop here...
 
     server.start()
-
+    # TODO : how to handle exceptions here ??
+    #  we would like to except, trigger some user-defined behavior and restart what needs to be.
     print('Serving Bokeh application on http://localhost:5006/')
 
     await asyncio.sleep(3600)  # running for one hour.
     # TODO : scheduling restart (crontab ? cli params ?) -> GOAL: ensure resilience (erlang-style)
 
 
+def _internal_bokeh(doc):
+    doc.add_root(
+        PreText(text="LiveBokeh Server is working !")  # TODO : render THIS source code ??
+    )
+
+
 if __name__ == '__main__':
-
-    def test_page(doc):
-        doc.add_root(
-            PreText(text="LiveBokeh is working !")
-        )
-
     try:
-        asyncio.run(monosrv({'/': test_page}))
+        asyncio.run(monosrv({'/': _internal_bokeh}))
     except KeyboardInterrupt:
         print("Exiting...")
 

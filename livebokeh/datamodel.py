@@ -10,7 +10,7 @@ import typing
 from bokeh.document import Document
 from bokeh.layouts import column, row
 from bokeh.plotting import Figure
-from bokeh.models import ColumnDataSource, GlyphRenderer, Plot, DataTable, TableColumn, DateFormatter
+from bokeh.models import ColumnDataSource, GlyphRenderer, Plot, DataTable, PreText, TableColumn, DateFormatter
 from bokeh.util.serialization import convert_datetime_array, convert_datetime_type
 
 
@@ -26,7 +26,7 @@ class DataModel:
         # Attempting to discover appends based on index...
         data_index = self._data.index
         appended_index = compared_to.index.difference(data_index)
-
+        # TODO : double check, seems buggy...
         streamable = compared_to.loc[appended_index]
 
         if streamable.any(axis='columns').any():
@@ -41,14 +41,14 @@ class DataModel:
         # Attempting to discover patches based on index...
         data_index = self._data.index
         patched_index = compared_to.index.intersection(data_index)
-
+        # TODO : double check, seems buggy...
         available_patches = compared_to.loc[patched_index]
 
         # if we have some potential patches
         patches = dict()
         if available_patches.any(axis='columns').any():
             # only patch data differences
-            patchfilter = available_patches.isin(self._data)
+            patchfilter = available_patches.isin(self._data)  #TODO : prevent "ValueError: cannot compute isin with a duplicate axis."
             patchable_indices = patchfilter[~patchfilter.all(axis='columns')].index
             patchable = available_patches.loc[patchable_indices]
 
@@ -64,7 +64,7 @@ class DataModel:
         return patches
 
     @property
-    def data(self):
+    def data(self):  # to mark it read-only. use __call__ for update.
         return self._data
 
     @property
@@ -75,6 +75,11 @@ class DataModel:
         # note that _detach_document seems to be called properly by bokeh and datasource's document is set to None.
         return src
 
+    def view(self, callable: typing.Callable[[pandas.DataFrame], pandas.DataFrame]):
+        # TODO: a preprocess that always trigger on source creation or patch or stream...
+        #  OR between data models ?? like a compute dependency graph ?
+        raise NotImplementedError
+
     @property
     def table(self) -> DataTable:  # TODO : Table is actually another kind of DataView...
         """ Simplest model to visually help debug interactive update.
@@ -82,7 +87,7 @@ class DataModel:
         """
 
         ds = self.source
-        ds.name= f"{self._name}_tableview"
+        ds.name = f"{self._name}_tableview"
         dt = DataTable(source=ds, columns=[
 
             TableColumn(field=f, title=f, formatter=DateFormatter(format="%m/%d/%Y %H:%M:%S"))
@@ -97,6 +102,12 @@ class DataModel:
     def __init__(self, data: pandas.DataFrame, name:str, debug=True):
         self._debug = debug
         self._name = name
+
+        # make sure index values are unique (set semantics, or some operations might fail later on...)
+        if not data.index.is_unique:
+            raise TypeError(f"{data.index} has to be unique to guarantee proper behavior during later computations."
+                            "If in doubt, keep pandas' default index.")
+
         self._data = data
         self._rendered_datasources = list()
         # a set here is fine, it is never included in the bokeh document
@@ -109,7 +120,10 @@ class DataModel:
         if debug is not None:
             self._debug = debug
 
-        assert new_data.index.is_unique  # To be sure we keep unique index... (Set semantics for simplicity)
+        # make sure index values are unique (set semantics, or some operations might fail later on...)
+        if not new_data.index.is_unique:
+            raise TypeError(f"{new_data.index} has to be unique to guarantee proper behavior during later computations."
+                            "If in doubt, keep pandas' default index.")
 
         patches = self._patch(new_data)
 
@@ -140,6 +154,12 @@ class DataModel:
                 )
 
         return self  # to be able to chain updates.
+
+
+def _internal_bokeh(doc):
+    doc.add_root(
+        PreText(text="LiveBokeh DataModel is working !")  # TODO : render THIS source code example ??
+    )
 
 
 if __name__ == '__main__':
