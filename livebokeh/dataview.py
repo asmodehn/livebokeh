@@ -23,6 +23,8 @@ class DataView:  # rename ? "LiveFrameView"
 
     # TODO : some plot visualisation in terminal ...
 
+    # TODO : Do we need model here, or can we just rely on ColumnDataSource from bokeh ?
+    #        BETTER: DataView and DataModel would be usable separately.
     def __init__(self, model: DataModel, filter: typing.Optional[typing.Callable[[typing.Any], bool]] = None):  # Note : typing.Any represent the type of the row tuple
         self.model = model
         # Note : views here should be "per-line" of data
@@ -38,6 +40,7 @@ class DataView:  # rename ? "LiveFrameView"
             self.view = CDSView(source=self.model.source, filters=[
                 BooleanFilter(boolfilter)
             ])
+        # Note : the view instantiated here can now be rendered in various plots.
 
         # we always render ALL columns here. otherwise change your datamodel.
         self._table_columns = [
@@ -60,7 +63,7 @@ class DataView:  # rename ? "LiveFrameView"
     def table(self):
         # Note : index position is None, as that index (not a column) seems not usable in plots...)
 
-        return DataTable(source=self.model.source, view=self.view, columns=self._table_columns,
+        return DataTable(source=self.view.source, view=self.view, columns=self._table_columns,
                           **self._table_args)
 
     def plot_args(self, **figure_kwargs):
@@ -75,7 +78,8 @@ class DataView:  # rename ? "LiveFrameView"
 
         # by default : lines
         for c in self.model.data.columns:
-            figure.line(source=self.model.source, view=self.view, x="index", y=c, color=color_index[c], legend_label=c)
+            # CAREFUL : CDSView used by Glyph renderer must have a source that matches the Glyph renderer's data source
+            figure.line(source=self.view.source, view=self.view, x="index", y=c, color=color_index[c], legend_label=c)
 
         return figure
 
@@ -147,7 +151,7 @@ if __name__ == '__main__':
     def test_page(doc):
         doc.add_root(
             column(
-                row(fview.plot, random_data_model.table, view.plot),
+                row(fview.plot, random_data_model.view.table, view.plot),
             )
         )
 

@@ -27,8 +27,9 @@ async def monosrv(applications: typing.Dict[str, typing.Callable[[Document], typ
 
 
 def _internal_bokeh(doc):
+    import inspect
     doc.add_root(
-        PreText(text="LiveBokeh Server is working !")  # TODO : render THIS source code ??
+        PreText(text=inspect.getsource(monosrv))  # TODO : niceties like pygments ??
     )
 
 

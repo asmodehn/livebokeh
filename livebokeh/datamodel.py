@@ -3,6 +3,8 @@ Data Driven Bokeh
 """
 from __future__ import annotations
 
+import functools
+import inspect
 from collections import namedtuple
 
 import pandas
@@ -15,11 +17,15 @@ from bokeh.util.serialization import convert_datetime_array, convert_datetime_ty
 
 
 class DataModel:  # rename ? "LiveFrame"
-
+    # TODO : leverage github.com/asmodehn/framable package to implement some way of "processing datamodel into another"
+    #        GOAL : a compute network fo dataframes would allows to implement "functions" between dataframes, as usual code...
     _data: pandas.DataFrame
 
     _rendered_datasources: typing.List[ColumnDataSource]
     # REMINDER : document is a property of bokeh's datasource
+
+    # in a sense, the compute graph of models indexed from this one (one level only)...
+    _related_models: typing.Dict[typing.List[str], functools.partial]
 
     @property
     def columns(self):
@@ -79,28 +85,10 @@ class DataModel:  # rename ? "LiveFrame"
         # note that _detach_document seems to be called properly by bokeh and datasource's document is set to None.
         return src
 
-    def view(self, callable: typing.Callable[[pandas.DataFrame], pandas.DataFrame]):
-        # TODO: a preprocess that always trigger on source creation or patch or stream...
-        #  OR between data models ?? like a compute dependency graph ?
-        raise NotImplementedError
-
     @property
-    def table(self) -> DataTable:  # TODO : Table is actually another kind of DataView...
-        """ Simplest model to visually help debug interactive update.
-            This does NOT require us to call stream or patch.
-        """
-
-        ds = self.source
-        ds.name = f"{self._name}_tableview"
-        dt = DataTable(source=ds, columns=[
-
-            TableColumn(field=f, title=f, formatter=DateFormatter(format="%m/%d/%Y %H:%M:%S"))
-            if pandas.api.types.is_datetime64_any_dtype(self.data.dtypes[i-1]) else  # CAREFUL with index
-
-            TableColumn(field=f, title=f)
-            for i, f in enumerate(ds.column_names)
-        ], sortable=False, reorderable=False, index_position=None)
-        return dt
+    def view(self):
+        from livebokeh.dataview import DataView
+        return DataView(model=self)  # DataModel doesnt need to keep track of views, bokeh does this already.
 
     """ class representing one viewplot - potentially rendered in multiple documents """
     def __init__(self, data: pandas.DataFrame, name:str, debug=True):
@@ -115,6 +103,74 @@ class DataModel:  # rename ? "LiveFrame"
         self._data = data
         self._rendered_datasources = list()
         # a set here is fine, it is never included in the bokeh document
+
+        self._related_models = dict()
+
+    # TODO : cleaner API. This is one of apply|map|applymap of pandas. we should probably stay close to their API...
+    def lift(self, elem_fun: typing.Callable[[typing.Any], typing.Any]):
+        # some sort of fmap implementation, keeping track of compute relations, enabling updates.
+
+        # CAREFUL : we need to guarantee unicity (=> pure elem function!) here, to keep compute graph tractable:
+        funstuff = {n: v for n, v in inspect.getmembers(elem_fun)}
+        if funstuff["__code__"] in self._related_models:
+            # we use hte bytecode hash as unique identifier for the function
+            return self._related_models[funstuff["__code__"]]  # CAREFUL with datasources and views
+
+        sig = inspect.signature(elem_fun)
+
+        def wrapped(model_in: DataModel, model_out: typing.Optional[DataModel] = None):
+            new_data = model_in.data.apply(elem_fun, axis='columns', result_type='expand')
+            if model_out is not None:  # already exists, we just modify its data
+                model_out(new_data=new_data)
+            else:  # the first time
+                model_out = DataModel(
+                    data=new_data,
+                    name=f"{model_in._name} {sig.return_annotation}",  # TODO : refine naming types/models here...
+                    debug=True
+                )
+
+                # we store the (runnable/updatable) relation
+                model_in._related_models[funstuff["__code__ "]] = functools.partial(wrapped, model_in=model_in, model_out=model_out)
+            return model_out
+
+        # TODO : static lift...
+        # the lifted function will immediately get model_in=self, since we are using this instance's list()...
+        self_wrapped = functools.partial(wrapped, model_in=self)
+        return self_wrapped
+
+    def __getitem__(self, item: typing.List[str]):  # TODO: better typing than str ?
+        #  somewhat dual to DataView indexing by rows / elements (operation on values)
+        #  comparable to type indexed families, see Martin-Loef Type Theory (operation on types)
+
+        if isinstance(item, list):  # making explicit only one possible case in python...
+
+            # CAREFUL : we should guarantee unicity here, because of compute storage:
+            if item in self._related_models:
+                return self._related_models[item]  # CAREFUL with datasources and views
+
+            # Note : __getitem__ is already lifted by pandas,
+            # and we don't want to slow it down (by going down to rows and back)
+            #  => double implementation of DataModel.lift() method, this being a special case...
+            def wrapped(model_in: DataModel, model_out: typing.Optional[DataModel] = None):
+                subdata = model_in.data[item]  # __getitem__ is already lifted by pandas itself...
+                if model_out is not None:  # This is an update
+                    model_out(new_data=subdata)
+                else:
+                    model_out = DataModel(
+                        data=subdata,
+            # Notice item always will be a subset of the current columns list (potentially the current index...)
+                        name=f"{model_in._name.split('[')[0]}[{item}]",  # TODO : refine naming types/models here...
+                        debug=True
+                    )
+
+                    # we store the (runnable/updatable) relation
+                    model_in._related_models[item] = functools.partial(wrapped, model_in=model_in, model_out=model_out)
+                return model_out
+
+            # cf Ahman's containers for theoretical background here: https://danel.ahman.ee/papers/msfp16.pdf
+            return wrapped(self)
+        else:  # TODO maybe
+            raise NotImplementedError
 
     def __call__(self, new_data: typing.Optional[pandas.DataFrame] = None, name=None, debug = None) -> DataModel:
         """ To schedule optimal push of detected data changes. """
@@ -150,6 +206,12 @@ class DataModel:  # rename ? "LiveFrame"
         # Replace data here and in existing datasources.
         # BUT it will NOT trigger redraw of the various plots, we rely on stream or patch for that.
         self._data = new_data
+
+        # We also do the same for related models
+        for code, runnable in self._related_models.items():
+            print(f"propagating update for {code}")
+            runnable()  # already contains domain and codomain - with new data-, here we just press the trigger.
+
         # Note this is necessary for further patches to work correctly and not get out of bounds.
         for rds in self._rendered_datasources:
             if rds.document is not None:
@@ -177,17 +239,17 @@ if __name__ == '__main__':
     # Note : This is "created" before a document output is known
     # and before a request is sent to the server
     start = datetime.now()
-    ddsource1 = DataModel(name="ddsource1", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random1"],
-                                                                  index=[start, start+timedelta(milliseconds=1)]),
-                          debug=False)
-    ddsource2 = DataModel(name="ddsource2", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random2"],
-                                                                  index=[start, start+timedelta(milliseconds=1)]),
-                          debug=False)
+    ddmodel1 = DataModel(name="ddsource1", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random1"],
+                                                                 index=[start, start+timedelta(milliseconds=1)]),
+                         debug=False)
+    ddmodel2 = DataModel(name="ddsource2", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random2"],
+                                                                 index=[start, start+timedelta(milliseconds=1)]),
+                         debug=False)
     # Note we add some initial data to have bokeh center the plot properly on the time axis TODO : fix it !
 
     # Producer as a background task
     async def compute_random(m, M):
-        tick = ddsource1.data.index.to_list()  # to help with full data generation
+        tick = ddmodel1.data.index.to_list()  # to help with full data generation
         while True:
             now = datetime.now()
             tick.append(now)
@@ -195,7 +257,7 @@ if __name__ == '__main__':
 
             # push FULL data updates !
             # Note some derivative computation may require more than you think
-            ddsource1(pandas.DataFrame(
+            ddmodel1(pandas.DataFrame(
                 columns=["random1"],
                 data = {
                     "random1": [
@@ -206,7 +268,7 @@ if __name__ == '__main__':
             ))
 
             # Note : we can trigger only a stream update by calling with the same data + some appended...
-            ddsource2(ddsource2.data.append(
+            ddmodel2(ddmodel2.data.append(
                 pandas.DataFrame(data = {"random2": [random.randint(m, M)]}, index=[now])
             ))
 
@@ -220,12 +282,12 @@ if __name__ == '__main__':
                         x_axis_type='datetime', sizing_mode="scale_width")
 
         # dynamic datasource plots as simply as possible
-        debug_fig.line(x="index", y="random1", color="blue", source=ddsource1.source, legend_label="Patch+Stream")
-        debug_fig.line(x="index", y="random2", color="red", source=ddsource2.source, legend_label="Stream")
+        debug_fig.line(x="index", y="random1", color="blue", source=ddmodel1.source, legend_label="Patch+Stream")
+        debug_fig.line(x="index", y="random2", color="red", source=ddmodel2.source, legend_label="Stream")
 
         doc.add_root(
                 # to help compare / visually debug
-                row(debug_fig, ddsource1.table, ddsource2.table)
+                row(debug_fig, ddmodel1.view.table, ddmodel2.view.table)
         )
 
     async def main():
