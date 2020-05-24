@@ -24,12 +24,12 @@ def test_render():
     dv = DataView(model=dm)
 
     assert dv.model == dm
-    rendered = dv()
+    rendered = dv.plot
 
     assert isinstance(rendered, Plot)
 
     assert dv.model == dm
-    rendered2 = dv()
+    rendered2 = dv.plot
 
     assert isinstance(rendered, Plot)
     assert rendered2 != rendered

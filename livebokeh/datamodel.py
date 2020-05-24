@@ -14,12 +14,16 @@ from bokeh.models import ColumnDataSource, GlyphRenderer, Plot, DataTable, PreTe
 from bokeh.util.serialization import convert_datetime_array, convert_datetime_type
 
 
-class DataModel:
+class DataModel:  # rename ? "LiveFrame"
 
     _data: pandas.DataFrame
 
     _rendered_datasources: typing.List[ColumnDataSource]
     # REMINDER : document is a property of bokeh's datasource
+
+    @property
+    def columns(self):
+        return self._data.columns
 
     def _stream(self, compared_to: pandas.DataFrame) -> typing.Optional[pandas.DataFrame]:
 
