@@ -2,9 +2,11 @@
 A minimalist async server for visualization
 """
 import asyncio
+import sys
 import typing
 
 from bokeh.document import Document
+from bokeh.layouts import column
 from bokeh.models import PreText
 from bokeh.server.server import Server as BokehServer
 
@@ -26,16 +28,26 @@ async def monosrv(applications: typing.Dict[str, typing.Callable[[Document], typ
     # TODO : scheduling restart (crontab ? cli params ?) -> GOAL: ensure resilience (erlang-style)
 
 
-def _internal_bokeh(doc):
+def _internal_bokeh(doc, example=None):
     import inspect
+
+    sourceview = inspect.getsource(monosrv)
+    thissourceview = inspect.getsource(_internal_bokeh)
+    moduleview = inspect.getsource(sys.modules[__name__])
+    mainview = "if __name__ == '__main__':\n" + moduleview.split("if __name__ == '__main__':\n")[-1]
     doc.add_root(
-        PreText(text=inspect.getsource(monosrv))  # TODO : niceties like pygments ??
-    )
+        column(
+        PreText(text=sourceview),  # TODO : niceties like pygments ??
+        PreText(text=thissourceview),
+        PreText(text=mainview),
+    ))
 
 
 if __name__ == '__main__':
     try:
-        asyncio.run(monosrv({'/': _internal_bokeh}))
+        asyncio.run(livemain([
+            monosrv({'/': _internal_bokeh})
+        ]))
     except KeyboardInterrupt:
         print("Exiting...")
 

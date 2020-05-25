@@ -1,3 +1,5 @@
+import asyncio
+import functools
 import typing
 
 import bokeh
@@ -90,7 +92,7 @@ class DataView:  # rename ? "LiveFrameView"
         return DataView(model=self.model, filter=item)
 
 
-if __name__ == '__main__':
+async def _internal_example():
     # Minimal server test
     import random
     import asyncio
@@ -100,11 +102,11 @@ if __name__ == '__main__':
     # and before a request is sent to the server
     start = datetime.now()
     random_data_model = DataModel(name="random_data_model", data=pandas.DataFrame(data=[
-            [random.randint(-10, 10), random.randint(-10, 10)],
-            [random.randint(-10, 10), random.randint(-10, 10)],
-        ],
-            columns=["random1", "random2"],
-            index=[start, start+timedelta(milliseconds=1)]
+        [random.randint(-10, 10), random.randint(-10, 10)],
+        [random.randint(-10, 10), random.randint(-10, 10)],
+    ],
+        columns=["random1", "random2"],
+        index=[start, start + timedelta(milliseconds=1)]
     ))
 
     # Note : This is "created" before a document output is known and before a request is sent to the server
@@ -129,39 +131,55 @@ if __name__ == '__main__':
             print(now)  # print in console for explicitness
 
             new_data = {
-                    "random1": [
-                        random.randint(m, M)  # change everything to trigger patch
-                        for t in range(len(tick))  # + 1 extra element to stream
-                    ],
-                    "random2": random_data_model.data["random2"].to_list() + [
-                        random.randint(m, M)  # only add one element to stream
-                    ]
-                }
+                "random1": [
+                    random.randint(m, M)  # change everything to trigger patch
+                    for t in range(len(tick))  # + 1 extra element to stream
+                ],
+                "random2": random_data_model.data["random2"].to_list() + [
+                    random.randint(m, M)  # only add one element to stream
+                ]
+            }
 
             # push FULL data updates !
             # Note some derivative computation may require more than you think
             random_data_model(pandas.DataFrame(
                 columns=["random1", "random2"],
-                data = new_data,
-                index = tick
+                data=new_data,
+                index=tick
             ))
 
             await asyncio.sleep(1)
 
-    def test_page(doc):
-        doc.add_root(
-            column(
-                row(fview.plot, random_data_model.view.table, view.plot),
-            )
+    # bg async task...
+    asyncio.create_task(compute_random(-10, 10))
+
+    return random_data_model, view, fview
+
+
+def _internal_bokeh(doc, example=None):
+
+    # Note: if launched by package, the result of _internal_example is passed via kwargs
+    random_data_model = example[0]
+    view = example[1]
+    fview = example[2]
+
+    doc.add_root(
+        column(
+            row(fview.plot, random_data_model.view.table, view.plot),
         )
+    )
+
+
+if __name__ == '__main__':
 
     async def main():
 
         from livebokeh.monosrv import monosrv
-        # bg async task...
-        asyncio.create_task(compute_random(-10, 10))
 
-        await monosrv({'/': test_page})
+        # initializing example
+        example = await _internal_example()
+
+        await monosrv({'/': functools.partial(_internal_bokeh, example=example)})
 
     try:
         asyncio.run(main())

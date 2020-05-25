@@ -1,10 +1,13 @@
 from __future__ import annotations
+
+import inspect
 import time
 from datetime import datetime, timedelta
 import pandas
 import typing
 
-from bokeh.models import DataTable, DateFormatter, TableColumn
+from bokeh.layouts import column
+from bokeh.models import DataTable, DateFormatter, PreText, TableColumn
 from bokeh.palettes import viridis
 from bokeh.plotting import Figure
 
@@ -70,30 +73,35 @@ class Clock:
 
 
 clock = Clock()
-# Note : HOW TODO implicit ticking regarding outputs ??
 
 
-async def clock_ticking(period_secs: float, ttyout=False) -> None:
-    import asyncio
-    while True:
-        await asyncio.sleep(period_secs)
-        clock(period_secs=None, ttyout=ttyout)  # calling itself synchronously
-
-
-def _internal_bokeh(doc):
+def _internal_bokeh(doc, example=None):
     from bokeh.layouts import row
     import asyncio
 
-    # tick in background every second, retrieving the local clock measurement...
-    asyncio.get_running_loop().create_task(clock_ticking(period_secs=1, ttyout=True))
-    # TODO: in here or in  main ? or somewhere else ??
+    async def clock_retrieve(period_secs: float, ttyout=False) -> None:
+        import asyncio
+        while True:
+            await asyncio.sleep(period_secs)
+            clock(period_secs=None, ttyout=ttyout)  # calling itself synchronously
+
+    # tick always in background but we retrieve its measurement every second.
+    asyncio.get_running_loop().create_task(clock_retrieve(period_secs=1, ttyout=True))
+    # TODO : turn off retrieval when document is detached ?
+
+    clocksourceview = inspect.getsource(Clock)
+    thissourceview = inspect.getsource(_internal_bokeh)
 
     doc.add_root(
+        column( PreText(text=clocksourceview),
+                PreText(text=thissourceview)
+        ),
         # to help compare / visually debug
-        row(clock[["minute", "second"]].plot, clock[["minute", "second"]].table)
+        column(clock[["minute", "second"]].plot,
+               clock[["minute", "second"]].table)
         # Note : even if we create multiple clock instances here,
         # the model is the same, and propagation will update all datasources...
-    )
+        )
 
 
 if __name__ == '__main__':

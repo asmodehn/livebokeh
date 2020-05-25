@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import functools
 import inspect
+import sys
 from collections import namedtuple
 
 import pandas
 import typing
 from bokeh.document import Document
-from bokeh.layouts import column, row
+from bokeh.layouts import column, grid, row
 from bokeh.plotting import Figure
 from bokeh.models import ColumnDataSource, GlyphRenderer, Plot, DataTable, PreText, TableColumn, DateFormatter
 from bokeh.util.serialization import convert_datetime_array, convert_datetime_type
@@ -130,7 +131,7 @@ class DataModel:  # rename ? "LiveFrame"
                 )
 
                 # we store the (runnable/updatable) relation
-                model_in._related_models[funstuff["__code__ "]] = functools.partial(wrapped, model_in=model_in, model_out=model_out)
+                model_in._related_models[funstuff["__code__"]] = functools.partial(wrapped, model_in=model_in, model_out=model_out)
             return model_out
 
         # TODO : static lift...
@@ -222,29 +223,26 @@ class DataModel:  # rename ? "LiveFrame"
         return self  # to be able to chain updates.
 
 
-def _internal_bokeh(doc):
-    doc.add_root(
-        PreText(text="LiveBokeh DataModel is working !")  # TODO : render THIS source code example ??
-    )
-
-
-if __name__ == '__main__':
+async def _internal_example():  # async because we need to schedule tasks in background...
     # Minimal server test
     import random
     import asyncio
     from datetime import datetime, timedelta
 
-    from bokeh.server.server import Server as BokehServer
-
     # Note : This is "created" before a document output is known
     # and before a request is sent to the server
     start = datetime.now()
-    ddmodel1 = DataModel(name="ddsource1", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random1"],
-                                                                 index=[start, start+timedelta(milliseconds=1)]),
+    ddmodel1 = DataModel(name="ddsource1",
+                         data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)],
+                                               columns=["random1"],
+                                               index=[start, start + timedelta(milliseconds=1)]),
                          debug=False)
-    ddmodel2 = DataModel(name="ddsource2", data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)], columns=["random2"],
-                                                                 index=[start, start+timedelta(milliseconds=1)]),
+    ddmodel2 = DataModel(name="ddsource2",
+                         data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)],
+                                               columns=["random2"],
+                                               index=[start, start + timedelta(milliseconds=1)]),
                          debug=False)
+
     # Note we add some initial data to have bokeh center the plot properly on the time axis TODO : fix it !
 
     # Producer as a background task
@@ -259,43 +257,75 @@ if __name__ == '__main__':
             # Note some derivative computation may require more than you think
             ddmodel1(pandas.DataFrame(
                 columns=["random1"],
-                data = {
+                data={
                     "random1": [
-                    random.randint(m, M)
-                    for t in range(len(tick))
-                ]},
-                index = tick
+                        random.randint(m, M)
+                        for t in range(len(tick))
+                    ]},
+                index=tick
             ))
 
             # Note : we can trigger only a stream update by calling with the same data + some appended...
             ddmodel2(ddmodel2.data.append(
-                pandas.DataFrame(data = {"random2": [random.randint(m, M)]}, index=[now])
+                pandas.DataFrame(data={"random2": [random.randint(m, M)]}, index=[now])
             ))
 
             await asyncio.sleep(1)
 
-    def test_page(doc):
-        # Debug Figure
-        debug_fig = Figure(title="Random Test", plot_height=480,
-                        tools='pan, xwheel_zoom, reset',
-                        toolbar_location="left", y_axis_location="right",
-                        x_axis_type='datetime', sizing_mode="scale_width")
+    # scheduling bg async task... will start with the server (not the client request)
+    asyncio.get_running_loop().create_task(compute_random(-10, 10))
 
-        # dynamic datasource plots as simply as possible
-        debug_fig.line(x="index", y="random1", color="blue", source=ddmodel1.source, legend_label="Patch+Stream")
-        debug_fig.line(x="index", y="random2", color="red", source=ddmodel2.source, legend_label="Stream")
+    # we return the functions here so they are usable by the main code.
+    # Note : the separation of these function is important to illustrate the different calls (startup /vs/ client request)
+    return ddmodel1, ddmodel2
 
-        doc.add_root(
-                # to help compare / visually debug
-                row(debug_fig, ddmodel1.view.table, ddmodel2.view.table)
-        )
+
+def _internal_bokeh(doc, example=None):
+    sourceview = inspect.getsource(DataModel)
+    exampleview = inspect.getsource(_internal_example)
+    thissourceview = inspect.getsource(_internal_bokeh)
+    moduleview = inspect.getsource(sys.modules[__name__])
+    mainview = "if __name__ == '__main__':\n" + moduleview.split("if __name__ == '__main__':\n")[-1]
+
+    # Note: if launched by package, the result of _internal_example is passed via kwargs
+    ddmodel1 = example[0]
+    ddmodel2 = example[1]
+
+    # Debug Bokeh Figure
+    debug_fig = Figure(title="Random Test", plot_height=480,
+                       tools='pan, xwheel_zoom, reset',
+                       toolbar_location="left", y_axis_location="right",
+                       x_axis_type='datetime', sizing_mode="scale_width")
+
+    # dynamic datasource plots as simply as possible
+    debug_fig.line(x="index", y="random1", color="blue", source=ddmodel1.source, legend_label="Patch+Stream")
+    debug_fig.line(x="index", y="random2", color="red", source=ddmodel2.source, legend_label="Stream")
+
+    doc.add_root(grid(
+        [
+            PreText(text=sourceview),  # TODO : niceties like pygments ??
+            row(column(
+                PreText(text=exampleview),
+                PreText(text=thissourceview),
+                PreText(text=mainview),
+            ),  column(
+                    # to help compare / visually debug
+                    debug_fig, ddmodel1.view.table, ddmodel2.view.table
+            ))
+        ], nrows=2)
+    )
+
+
+if __name__ == '__main__':
+    import asyncio
 
     async def main():
         from livebokeh.monosrv import monosrv
-        # bg async task...
-        asyncio.create_task(compute_random(-10, 10))
 
-        await monosrv({'/': test_page})
+        # initializing example
+        example = await _internal_example()
+
+        await monosrv({'/': functools.partial(_internal_bokeh, example=example)})
 
     try:
         asyncio.run(main())
