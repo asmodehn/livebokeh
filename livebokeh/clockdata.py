@@ -26,18 +26,21 @@ class Clock:
 
     @staticmethod
     def datetime2dataframe(dt: datetime = datetime.now()):
-        return pandas.DataFrame(data=[
-            [dt]
-        ], columns=["datetime"],
-        )
+        return pandas.DataFrame(data=[[dt]], columns=["datetime"],)
 
     def __init__(self, model: typing.Optional[DataModel] = None):
-        self.model = model if model is not None else DataModel(Clock.datetime2dataframe(), name="Clock")
+        self.model = (
+            model
+            if model is not None
+            else DataModel(Clock.datetime2dataframe(), name="Clock")
+        )
 
     def __call__(self, period_secs=None, ttyout=False) -> None:
         # no period: one tick only, no return.
         df = self.datetime2dataframe(datetime.now())
-        self.model(self.model.data.append(df, ignore_index=True))  # verify_integrity=True))
+        self.model(
+            self.model.data.append(df, ignore_index=True)
+        )  # verify_integrity=True))
 
         if ttyout:  # TODO: proper TUI interface...
             print(f"Clock Ticks:\n{self.model.data}")
@@ -47,7 +50,9 @@ class Clock:
         return self.model.data
 
     @property
-    def table(self) -> DataTable:  # TODO : Table is actually another kind of DataView...
+    def table(
+        self,
+    ) -> DataTable:  # TODO : Table is actually another kind of DataView...
         """ Simplest model to visually help debug interactive update.
             This does NOT require us to call stream or patch.
         """
@@ -67,8 +72,12 @@ class Clock:
             # Note : we need to pass a series to retrieve proper columns in dataframe
 
         dt_extractor = self.model.lift(dt_component_extractor)
-        extracted = dt_extractor()  # running the lifted getattr... # TODO : better (more pandas-like) way ?
-        return Clock(model=extracted)  # TODO CAREFUL : we should return a Unique clock for hte same index
+        extracted = (
+            dt_extractor()
+        )  # running the lifted getattr... # TODO : better (more pandas-like) way ?
+        return Clock(
+            model=extracted
+        )  # TODO CAREFUL : we should return a Unique clock for hte same index
         # => keep one related model with multiple sources...
 
 
@@ -81,6 +90,7 @@ def _internal_bokeh(doc, example=None):
 
     async def clock_retrieve(period_secs: float, ttyout=False) -> None:
         import asyncio
+
         while True:
             await asyncio.sleep(period_secs)
             clock(period_secs=None, ttyout=ttyout)  # calling itself synchronously
@@ -93,27 +103,23 @@ def _internal_bokeh(doc, example=None):
     thissourceview = inspect.getsource(_internal_bokeh)
 
     doc.add_root(
-        column( PreText(text=clocksourceview),
-                PreText(text=thissourceview)
-        ),
+        column(PreText(text=clocksourceview), PreText(text=thissourceview)),
         # to help compare / visually debug
-        column(clock[["minute", "second"]].plot,
-               clock[["minute", "second"]].table)
+        column(clock[["minute", "second"]].plot, clock[["minute", "second"]].table)
         # Note : even if we create multiple clock instances here,
         # the model is the same, and propagation will update all datasources...
-        )
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
 
     async def main():
         from livebokeh.monosrv import monosrv
 
-        await monosrv({'/': _internal_bokeh})
+        await monosrv({"/": _internal_bokeh})
 
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Exiting...")
-

@@ -15,9 +15,13 @@ def test_render():
 
     # TODO : generate sample data with hypothesis
     df = pandas.DataFrame(
-        data=[[random.randint(-10, 10), random.randint(-10, 10)], [random.randint(-10, 10), random.randint(-10, 10)]]
-        , columns=["random1", "random2"],
-        index=[now, now + timedelta(milliseconds=1)])
+        data=[
+            [random.randint(-10, 10), random.randint(-10, 10)],
+            [random.randint(-10, 10), random.randint(-10, 10)],
+        ],
+        columns=["random1", "random2"],
+        index=[now, now + timedelta(milliseconds=1)],
+    )
 
     dm = DataModel(name="TestDataModel", data=df)
 

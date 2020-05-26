@@ -6,8 +6,8 @@ import setuptools
 
 # Ref : https://packaging.python.org/single_source_version/#single-sourcing-the-version
 # runpy is safer and a better habit than exec
-version = runpy.run_path('livebokeh/_version.py')
-__version__ = version.get('__version__')
+version = runpy.run_path("livebokeh/_version.py")
+__version__ = version.get("__version__")
 
 
 # Best Flow :
@@ -24,6 +24,7 @@ __version__ = version.get('__version__')
 # Ref setup.py command extension : https://blog.niteoweb.com/setuptools-run-custom-code-in-setup-py/
 class PrepareReleaseCommand(setuptools.Command):
     """Command to release this package to Pypi"""
+
     description = "prepare a release of timecontrol"
     user_options = []
 
@@ -42,10 +43,16 @@ class PrepareReleaseCommand(setuptools.Command):
         # $ gitchangelog >CHANGELOG.rst
         # change version in code and changelog
         subprocess.check_call(
-            "git commit CHANGELOG.rst timecontrol/_version.py -m 'v{0}'".format(__version__), shell=True)
+            "git commit CHANGELOG.rst timecontrol/_version.py -m 'v{0}'".format(
+                __version__
+            ),
+            shell=True,
+        )
         subprocess.check_call("git push", shell=True)
 
-        print("You should verify travis checks, and you can publish this release with :")
+        print(
+            "You should verify travis checks, and you can publish this release with :"
+        )
         print("  python setup.py publish")
         sys.exit()
 
@@ -54,6 +61,7 @@ class PrepareReleaseCommand(setuptools.Command):
 # Ref setup.py command extension : https://blog.niteoweb.com/setuptools-run-custom-code-in-setup-py/
 class PublishCommand(setuptools.Command):
     """Command to release this package to Pypi"""
+
     description = "releases timecontrol to Pypi"
     user_options = []
 
@@ -75,30 +83,27 @@ class PublishCommand(setuptools.Command):
         # os.system("python setup.py sdist bdist_wheel upload")
         # NEW way:
         # Ref: https://packaging.python.org/distributing/
-        subprocess.check_call("twine upload dist/*", shell=True)  # TODO : handle authentication... (keyring...)
+        subprocess.check_call(
+            "twine upload dist/*", shell=True
+        )  # TODO : handle authentication... (keyring...)
 
-        subprocess.check_call("git tag -a {0} -m 'version {0}'".format(__version__), shell=True)
+        subprocess.check_call(
+            "git tag -a {0} -m 'version {0}'".format(__version__), shell=True
+        )
         subprocess.check_call("git push --tags", shell=True)
         # TODO : gitflow option of merging develop into master ?
         sys.exit()
 
 
 setuptools.setup(
-    name='livebokeh',
+    name="livebokeh",
     version=__version__,
-    description='Python library to display mutating dataframes from your code',
-    author='AlexV',
-    author_email='asmodehn@gmail.com',
-    url='https://github.com/asmodehn/livebokeh',
-    packages=['livebokeh'],
-    install_requires=[
-        "pandas==1.0.3",
-        "bokeh==2.0.2",
-    ],
-    cmdclass={
-        'prepare_release': PrepareReleaseCommand,
-        'publish': PublishCommand,
-    },
-    setup_requires=['wheel', 'twine']
+    description="Python library to display mutating dataframes from your code",
+    author="AlexV",
+    author_email="asmodehn@gmail.com",
+    url="https://github.com/asmodehn/livebokeh",
+    packages=["livebokeh"],
+    install_requires=["pandas==1.0.3", "bokeh==2.0.2",],
+    cmdclass={"prepare_release": PrepareReleaseCommand, "publish": PublishCommand,},
+    setup_requires=["wheel", "twine"],
 )
-

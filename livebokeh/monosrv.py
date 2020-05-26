@@ -11,7 +11,9 @@ from bokeh.models import PreText
 from bokeh.server.server import Server as BokehServer
 
 
-async def monosrv(applications: typing.Dict[str, typing.Callable[[Document], typing.Any]]):
+async def monosrv(
+    applications: typing.Dict[str, typing.Callable[[Document], typing.Any]]
+):
     """ Async server runner, to force the eventloop -same as the server loop- to be already running..."""
     print(f"Starting Tornado Server...")
     # Server will take current running asyncio loop as his own.
@@ -22,7 +24,7 @@ async def monosrv(applications: typing.Dict[str, typing.Callable[[Document], typ
     server.start()
     # TODO : how to handle exceptions here ??
     #  we would like to except, trigger some user-defined behavior and restart what needs to be.
-    print('Serving Bokeh application on http://localhost:5006/')
+    print("Serving Bokeh application on http://localhost:5006/")
 
     await asyncio.sleep(3600)  # running for one hour.
     # TODO : scheduling restart (crontab ? cli params ?) -> GOAL: ensure resilience (erlang-style)
@@ -34,21 +36,21 @@ def _internal_bokeh(doc, example=None):
     sourceview = inspect.getsource(monosrv)
     thissourceview = inspect.getsource(_internal_bokeh)
     moduleview = inspect.getsource(sys.modules[__name__])
-    mainview = "if __name__ == '__main__':\n" + moduleview.split("if __name__ == '__main__':\n")[-1]
+    mainview = (
+        "if __name__ == '__main__':\n"
+        + moduleview.split("if __name__ == '__main__':\n")[-1]
+    )
     doc.add_root(
         column(
-        PreText(text=sourceview),  # TODO : niceties like pygments ??
-        PreText(text=thissourceview),
-        PreText(text=mainview),
-    ))
+            PreText(text=sourceview),  # TODO : niceties like pygments ??
+            PreText(text=thissourceview),
+            PreText(text=mainview),
+        )
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
-        asyncio.run(livemain([
-            monosrv({'/': _internal_bokeh})
-        ]))
+        asyncio.run(livemain([monosrv({"/": _internal_bokeh})]))
     except KeyboardInterrupt:
         print("Exiting...")
-
-

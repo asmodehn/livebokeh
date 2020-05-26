@@ -19,6 +19,7 @@ class DataView:  # rename ? "LiveFrameView"
     If this is not what is desired, a DataProcess should be put in place to transform the DataModel.
 
     """
+
     model: DataModel
     # Note : in bokeh, a view already contain the source.
     # We should probably do the dual in here, have the views stored in the model...
@@ -27,7 +28,11 @@ class DataView:  # rename ? "LiveFrameView"
 
     # TODO : Do we need model here, or can we just rely on ColumnDataSource from bokeh ?
     #        BETTER: DataView and DataModel would be usable separately.
-    def __init__(self, model: DataModel, filter: typing.Optional[typing.Callable[[typing.Any], bool]] = None):  # Note : typing.Any represent the type of the row tuple
+    def __init__(
+        self,
+        model: DataModel,
+        filter: typing.Optional[typing.Callable[[typing.Any], bool]] = None,
+    ):  # Note : typing.Any represent the type of the row tuple
         self.model = model
         # Note : views here should be "per-line" of data
         # Note : potentially a model is already a view (root of view tree... cf Ahman's Containers...)
@@ -36,26 +41,30 @@ class DataView:  # rename ? "LiveFrameView"
         if filter is None:
             self.view = CDSView(source=self.model.source)  # defaults to complete view.
         else:
-            boolfilter=[filter(r) for r in self.model.data.itertuples()]
+            boolfilter = [filter(r) for r in self.model.data.itertuples()]
             # TODO : model iterable on rows ?
 
-            self.view = CDSView(source=self.model.source, filters=[
-                BooleanFilter(boolfilter)
-            ])
+            self.view = CDSView(
+                source=self.model.source, filters=[BooleanFilter(boolfilter)]
+            )
         # Note : the view instantiated here can now be rendered in various plots.
 
         # we always render ALL columns here. otherwise change your datamodel.
         self._table_columns = [
-
-            TableColumn(field=f, title=f, formatter=DateFormatter(format="%m/%d/%Y %H:%M:%S"))
-            if pandas.api.types.is_datetime64_any_dtype(self.model.data.dtypes[i - 1]) else  # CAREFUL with index
-
-            TableColumn(field=f, title=f) for i, f in enumerate(self.model.columns)
-
+            TableColumn(
+                field=f, title=f, formatter=DateFormatter(format="%m/%d/%Y %H:%M:%S")
+            )
+            if pandas.api.types.is_datetime64_any_dtype(self.model.data.dtypes[i - 1])
+            else TableColumn(field=f, title=f)  # CAREFUL with index
+            for i, f in enumerate(self.model.columns)
         ]
 
         # TODO : some clever introspection of model to find most appropriate arguments...
-        self._table_args = {'sortable':False, 'reorderable':False, 'index_position':None}
+        self._table_args = {
+            "sortable": False,
+            "reorderable": False,
+            "index_position": None,
+        }
         self._plot_args = dict()
 
     def table_args(self, **datatable_kwargs):
@@ -65,8 +74,12 @@ class DataView:  # rename ? "LiveFrameView"
     def table(self):
         # Note : index position is None, as that index (not a column) seems not usable in plots...)
 
-        return DataTable(source=self.view.source, view=self.view, columns=self._table_columns,
-                          **self._table_args)
+        return DataTable(
+            source=self.view.source,
+            view=self.view,
+            columns=self._table_columns,
+            **self._table_args
+        )
 
     def plot_args(self, **figure_kwargs):
         self._plot_args = figure_kwargs
@@ -81,13 +94,22 @@ class DataView:  # rename ? "LiveFrameView"
         # by default : lines
         for c in self.model.data.columns:
             # CAREFUL : CDSView used by Glyph renderer must have a source that matches the Glyph renderer's data source
-            figure.line(source=self.view.source, view=self.view, x="index", y=c, color=color_index[c], legend_label=c)
+            figure.line(
+                source=self.view.source,
+                view=self.view,
+                x="index",
+                y=c,
+                color=color_index[c],
+                legend_label=c,
+            )
 
         return figure
 
     # TODO : more plots
 
-    def __getitem__(self, item: typing.Callable[[typing.Any], bool]): # TODO : support various ways of indexing...
+    def __getitem__(
+        self, item: typing.Callable[[typing.Any], bool]
+    ):  # TODO : support various ways of indexing...
         # cf Ahman's containers for theoretical background here: https://danel.ahman.ee/papers/msfp16.pdf
         return DataView(model=self.model, filter=item)
 
@@ -101,30 +123,42 @@ async def _internal_example():
     # Note : This is "created" before a document output is known
     # and before a request is sent to the server
     start = datetime.now()
-    random_data_model = DataModel(name="random_data_model", data=pandas.DataFrame(data=[
-        [random.randint(-10, 10), random.randint(-10, 10)],
-        [random.randint(-10, 10), random.randint(-10, 10)],
-    ],
-        columns=["random1", "random2"],
-        index=[start, start + timedelta(milliseconds=1)]
-    ))
+    random_data_model = DataModel(
+        name="random_data_model",
+        data=pandas.DataFrame(
+            data=[
+                [random.randint(-10, 10), random.randint(-10, 10)],
+                [random.randint(-10, 10), random.randint(-10, 10)],
+            ],
+            columns=["random1", "random2"],
+            index=[start, start + timedelta(milliseconds=1)],
+        ),
+    )
 
     # Note : This is "created" before a document output is known and before a request is sent to the server
     view = DataView(model=random_data_model)
-    view.plot_args(title="Random Test", plot_height=480,
-                   tools='xpan, xwheel_zoom, reset',
-                   toolbar_location="left", y_axis_location="right",
-                   x_axis_type='datetime', sizing_mode="scale_width")
+    view.plot_args(
+        title="Random Test",
+        plot_height=480,
+        tools="xpan, xwheel_zoom, reset",
+        toolbar_location="left",
+        y_axis_location="right",
+        x_axis_type="datetime",
+        sizing_mode="scale_width",
+    )
     # filtering view on the left
     fview = view[
         # only show when random2 values are positive
-        lambda dt: dt.random2 > 0  # TODO : convert to pandas syntax... somehow
+        lambda dt: dt.random2
+        > 0  # TODO : convert to pandas syntax... somehow
         # here (dimension -1) we are talking about attributes, not columns...
     ]
 
     # Producer as a background task
     async def compute_random(m, M):
-        tick = random_data_model.data.index.to_list()  # to help with full data generation
+        tick = (
+            random_data_model.data.index.to_list()
+        )  # to help with full data generation
         while True:
             now = datetime.now()
             tick.append(now)
@@ -135,18 +169,17 @@ async def _internal_example():
                     random.randint(m, M)  # change everything to trigger patch
                     for t in range(len(tick))  # + 1 extra element to stream
                 ],
-                "random2": random_data_model.data["random2"].to_list() + [
-                    random.randint(m, M)  # only add one element to stream
-                ]
+                "random2": random_data_model.data["random2"].to_list()
+                + [random.randint(m, M)],  # only add one element to stream
             }
 
             # push FULL data updates !
             # Note some derivative computation may require more than you think
-            random_data_model(pandas.DataFrame(
-                columns=["random1", "random2"],
-                data=new_data,
-                index=tick
-            ))
+            random_data_model(
+                pandas.DataFrame(
+                    columns=["random1", "random2"], data=new_data, index=tick
+                )
+            )
 
             await asyncio.sleep(1)
 
@@ -163,14 +196,10 @@ def _internal_bokeh(doc, example=None):
     view = example[1]
     fview = example[2]
 
-    doc.add_root(
-        column(
-            row(fview.plot, random_data_model.view.table, view.plot),
-        )
-    )
+    doc.add_root(column(row(fview.plot, random_data_model.view.table, view.plot),))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     async def main():
 
@@ -179,11 +208,9 @@ if __name__ == '__main__':
         # initializing example
         example = await _internal_example()
 
-        await monosrv({'/': functools.partial(_internal_bokeh, example=example)})
+        await monosrv({"/": functools.partial(_internal_bokeh, example=example)})
 
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Exiting...")
-
-

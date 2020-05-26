@@ -14,9 +14,13 @@ from livebokeh.datamodel import DataModel
 def test_intindexed_data():
     # TODO : generate sample data with hypothesis
     df = pandas.DataFrame(
-        data=[[random.randint(-10, 10), random.randint(-10, 10)], [random.randint(-10, 10), random.randint(-10, 10)]]
-        , columns=["random1", "random2"],
-        index=[0, 1])
+        data=[
+            [random.randint(-10, 10), random.randint(-10, 10)],
+            [random.randint(-10, 10), random.randint(-10, 10)],
+        ],
+        columns=["random1", "random2"],
+        index=[0, 1],
+    )
 
     dm = DataModel(name="TestDataModel", data=df)
 
@@ -30,9 +34,14 @@ def test_datetimeindexed_data():
     now = datetime.now()
 
     # TODO : generate sample data with hypothesis
-    df = pandas.DataFrame(data=[[random.randint(-10, 10), random.randint(-10, 10)], [random.randint(-10, 10), random.randint(-10, 10)]]
-                          , columns=["random1", "random2"],
-                     index=[now, now + timedelta(milliseconds=1)])
+    df = pandas.DataFrame(
+        data=[
+            [random.randint(-10, 10), random.randint(-10, 10)],
+            [random.randint(-10, 10), random.randint(-10, 10)],
+        ],
+        columns=["random1", "random2"],
+        index=[now, now + timedelta(milliseconds=1)],
+    )
 
     dm = DataModel(name="TestDataModel", data=df)
     dd = dm.data
@@ -45,9 +54,14 @@ def test_source():
     now = datetime.now()
 
     # TODO : generate sample data with hypothesis
-    df = pandas.DataFrame(data=[[random.randint(-10, 10), random.randint(-10, 10)], [random.randint(-10, 10), random.randint(-10, 10)]]
-                          , columns=["random1", "random2"],
-                     index=[now, now + timedelta(milliseconds=1)])
+    df = pandas.DataFrame(
+        data=[
+            [random.randint(-10, 10), random.randint(-10, 10)],
+            [random.randint(-10, 10), random.randint(-10, 10)],
+        ],
+        columns=["random1", "random2"],
+        index=[now, now + timedelta(milliseconds=1)],
+    )
 
     dm = DataModel(name="TestDataModel", data=df)
 
@@ -66,9 +80,13 @@ def test_data_patch():
 
     # TODO : generate sample data with hypothesis
     df = pandas.DataFrame(
-        data=[[random.randint(-10, 10), random.randint(-10, 10)], [random.randint(-10, 10), random.randint(-10, 10)]]
-        , columns=["random1", "random2"],
-        index=[now, now + timedelta(milliseconds=1)])
+        data=[
+            [random.randint(-10, 10), random.randint(-10, 10)],
+            [random.randint(-10, 10), random.randint(-10, 10)],
+        ],
+        columns=["random1", "random2"],
+        index=[now, now + timedelta(milliseconds=1)],
+    )
 
     dm = DataModel(name="TestDataModel", data=df)
 
@@ -77,14 +95,20 @@ def test_data_patch():
 
     # same index, different values
     df2 = pandas.DataFrame(
-        data=[[random.randint(-20, -10), random.randint(-20, -10)], [random.randint(-20, -10), random.randint(-20, -10)]]
-        , columns=["random1", "random2"],
-        index=[now, now + timedelta(milliseconds=1)])
+        data=[
+            [random.randint(-20, -10), random.randint(-20, -10)],
+            [random.randint(-20, -10), random.randint(-20, -10)],
+        ],
+        columns=["random1", "random2"],
+        index=[now, now + timedelta(milliseconds=1)],
+    )
 
     patches = dm._patch(df2)
     # Note : we need to drop timestamp index and retrieve the integer index
-    assert patches == {col: [ (i,v) for i,v in s.items()]
-                       for col, s in df2.reset_index(drop=True).to_dict('series').items()}
+    assert patches == {
+        col: [(i, v) for i, v in s.items()]
+        for col, s in df2.reset_index(drop=True).to_dict("series").items()
+    }
 
     # TODO : more fine grained tests...
 
@@ -94,9 +118,13 @@ def test_data_stream():
 
     # TODO : generate sample data with hypothesis
     df = pandas.DataFrame(
-        data=[[random.randint(-10, 10), random.randint(-10, 10)], [random.randint(-10, 10), random.randint(-10, 10)]]
-        , columns=["random1", "random2"],
-        index=[now, now + timedelta(milliseconds=1)])
+        data=[
+            [random.randint(-10, 10), random.randint(-10, 10)],
+            [random.randint(-10, 10), random.randint(-10, 10)],
+        ],
+        columns=["random1", "random2"],
+        index=[now, now + timedelta(milliseconds=1)],
+    )
 
     dm = DataModel(name="TestDataModel", data=df)
 
@@ -105,13 +133,17 @@ def test_data_stream():
 
     # different indexes
     df2 = pandas.DataFrame(
-        data=[[random.randint(-10, 10), random.randint(-10, 10)], [random.randint(-10, 10), random.randint(-10, 10)]]
-        , columns=["random1", "random2"],
-        index=[now+timedelta(milliseconds=2), now + timedelta(milliseconds=3)])
+        data=[
+            [random.randint(-10, 10), random.randint(-10, 10)],
+            [random.randint(-10, 10), random.randint(-10, 10)],
+        ],
+        columns=["random1", "random2"],
+        index=[now + timedelta(milliseconds=2), now + timedelta(milliseconds=3)],
+    )
 
     streamable = dm._stream(df2)
     assert (streamable == df2).all().all()
 
 
-if __name__ == '__main__':
-    pytest.main(['-s', __file__])
+if __name__ == "__main__":
+    pytest.main(["-s", __file__])

@@ -4,6 +4,8 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+black = "*"
+pre-commit = "*"
 
 [packages]
 pandas = "1.0.3"
@@ -11,3 +13,6 @@ bokeh = "2.0.2"
 
 [requires]
 python_version = "3.8"
+
+[pipenv]
+allow_prereleases = true

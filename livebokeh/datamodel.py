@@ -13,7 +13,15 @@ import typing
 from bokeh.document import Document
 from bokeh.layouts import column, grid, row
 from bokeh.plotting import Figure
-from bokeh.models import ColumnDataSource, GlyphRenderer, Plot, DataTable, PreText, TableColumn, DateFormatter
+from bokeh.models import (
+    ColumnDataSource,
+    GlyphRenderer,
+    Plot,
+    DataTable,
+    PreText,
+    TableColumn,
+    DateFormatter,
+)
 from bokeh.util.serialization import convert_datetime_array, convert_datetime_type
 
 
@@ -32,7 +40,9 @@ class DataModel:  # rename ? "LiveFrame"
     def columns(self):
         return self._data.columns
 
-    def _stream(self, compared_to: pandas.DataFrame) -> typing.Optional[pandas.DataFrame]:
+    def _stream(
+        self, compared_to: pandas.DataFrame
+    ) -> typing.Optional[pandas.DataFrame]:
 
         # Attempting to discover appends based on index...
         data_index = self._data.index
@@ -40,7 +50,7 @@ class DataModel:  # rename ? "LiveFrame"
         # TODO : double check, seems buggy...
         streamable = compared_to.loc[appended_index]
 
-        if streamable.any(axis='columns').any():
+        if streamable.any(axis="columns").any():
             # TODO: log stream detected properly
             if self._debug:
                 print(f"Stream update: \n{streamable}")
@@ -57,13 +67,15 @@ class DataModel:  # rename ? "LiveFrame"
 
         # if we have some potential patches
         patches = dict()
-        if available_patches.any(axis='columns').any():
+        if available_patches.any(axis="columns").any():
             # only patch data differences
-            patchfilter = available_patches.isin(self._data)  #TODO : prevent "ValueError: cannot compute isin with a duplicate axis."
-            patchable_indices = patchfilter[~patchfilter.all(axis='columns')].index
+            patchfilter = available_patches.isin(
+                self._data
+            )  # TODO : prevent "ValueError: cannot compute isin with a duplicate axis."
+            patchable_indices = patchfilter[~patchfilter.all(axis="columns")].index
             patchable = available_patches.loc[patchable_indices]
 
-            if patchable.any(axis='columns').any():
+            if patchable.any(axis="columns").any():
                 # TODO: log patch detected properly
                 if self._debug:
                     print(f"Patch update: \n{patchable}")
@@ -89,17 +101,23 @@ class DataModel:  # rename ? "LiveFrame"
     @property
     def view(self):
         from livebokeh.dataview import DataView
-        return DataView(model=self)  # DataModel doesnt need to keep track of views, bokeh does this already.
+
+        return DataView(
+            model=self
+        )  # DataModel doesnt need to keep track of views, bokeh does this already.
 
     """ class representing one viewplot - potentially rendered in multiple documents """
-    def __init__(self, data: pandas.DataFrame, name:str, debug=True):
+
+    def __init__(self, data: pandas.DataFrame, name: str, debug=True):
         self._debug = debug
         self._name = name
 
         # make sure index values are unique (set semantics, or some operations might fail later on...)
         if not data.index.is_unique:
-            raise TypeError(f"{data.index} has to be unique to guarantee proper behavior during later computations."
-                            "If in doubt, keep pandas' default index.")
+            raise TypeError(
+                f"{data.index} has to be unique to guarantee proper behavior during later computations."
+                "If in doubt, keep pandas' default index."
+            )
 
         self._data = data
         self._rendered_datasources = list()
@@ -115,23 +133,29 @@ class DataModel:  # rename ? "LiveFrame"
         funstuff = {n: v for n, v in inspect.getmembers(elem_fun)}
         if funstuff["__code__"] in self._related_models:
             # we use hte bytecode hash as unique identifier for the function
-            return self._related_models[funstuff["__code__"]]  # CAREFUL with datasources and views
+            return self._related_models[
+                funstuff["__code__"]
+            ]  # CAREFUL with datasources and views
 
         sig = inspect.signature(elem_fun)
 
         def wrapped(model_in: DataModel, model_out: typing.Optional[DataModel] = None):
-            new_data = model_in.data.apply(elem_fun, axis='columns', result_type='expand')
+            new_data = model_in.data.apply(
+                elem_fun, axis="columns", result_type="expand"
+            )
             if model_out is not None:  # already exists, we just modify its data
                 model_out(new_data=new_data)
             else:  # the first time
                 model_out = DataModel(
                     data=new_data,
                     name=f"{model_in._name} {sig.return_annotation}",  # TODO : refine naming types/models here...
-                    debug=True
+                    debug=True,
                 )
 
                 # we store the (runnable/updatable) relation
-                model_in._related_models[funstuff["__code__"]] = functools.partial(wrapped, model_in=model_in, model_out=model_out)
+                model_in._related_models[funstuff["__code__"]] = functools.partial(
+                    wrapped, model_in=model_in, model_out=model_out
+                )
             return model_out
 
         # TODO : static lift...
@@ -143,7 +167,9 @@ class DataModel:  # rename ? "LiveFrame"
         #  somewhat dual to DataView indexing by rows / elements (operation on values)
         #  comparable to type indexed families, see Martin-Loef Type Theory (operation on types)
 
-        if isinstance(item, list):  # making explicit only one possible case in python...
+        if isinstance(
+            item, list
+        ):  # making explicit only one possible case in python...
 
             # CAREFUL : we should guarantee unicity here, because of compute storage:
             if item in self._related_models:
@@ -152,20 +178,26 @@ class DataModel:  # rename ? "LiveFrame"
             # Note : __getitem__ is already lifted by pandas,
             # and we don't want to slow it down (by going down to rows and back)
             #  => double implementation of DataModel.lift() method, this being a special case...
-            def wrapped(model_in: DataModel, model_out: typing.Optional[DataModel] = None):
-                subdata = model_in.data[item]  # __getitem__ is already lifted by pandas itself...
+            def wrapped(
+                model_in: DataModel, model_out: typing.Optional[DataModel] = None
+            ):
+                subdata = model_in.data[
+                    item
+                ]  # __getitem__ is already lifted by pandas itself...
                 if model_out is not None:  # This is an update
                     model_out(new_data=subdata)
                 else:
                     model_out = DataModel(
                         data=subdata,
-            # Notice item always will be a subset of the current columns list (potentially the current index...)
+                        # Notice item always will be a subset of the current columns list (potentially the current index...)
                         name=f"{model_in._name.split('[')[0]}[{item}]",  # TODO : refine naming types/models here...
-                        debug=True
+                        debug=True,
                     )
 
                     # we store the (runnable/updatable) relation
-                    model_in._related_models[item] = functools.partial(wrapped, model_in=model_in, model_out=model_out)
+                    model_in._related_models[item] = functools.partial(
+                        wrapped, model_in=model_in, model_out=model_out
+                    )
                 return model_out
 
             # cf Ahman's containers for theoretical background here: https://danel.ahman.ee/papers/msfp16.pdf
@@ -173,7 +205,9 @@ class DataModel:  # rename ? "LiveFrame"
         else:  # TODO maybe
             raise NotImplementedError
 
-    def __call__(self, new_data: typing.Optional[pandas.DataFrame] = None, name=None, debug = None) -> DataModel:
+    def __call__(
+        self, new_data: typing.Optional[pandas.DataFrame] = None, name=None, debug=None
+    ) -> DataModel:
         """ To schedule optimal push of detected data changes. """
 
         if name is not None:
@@ -183,17 +217,17 @@ class DataModel:  # rename ? "LiveFrame"
 
         # make sure index values are unique (set semantics, or some operations might fail later on...)
         if not new_data.index.is_unique:
-            raise TypeError(f"{new_data.index} has to be unique to guarantee proper behavior during later computations."
-                            "If in doubt, keep pandas' default index.")
+            raise TypeError(
+                f"{new_data.index} has to be unique to guarantee proper behavior during later computations."
+                "If in doubt, keep pandas' default index."
+            )
 
         patches = self._patch(new_data)
 
         if patches:
             for r in self._rendered_datasources:
                 if r.document is not None:
-                    r.document.add_next_tick_callback(
-                        lambda ds=r: ds.patch(patches)
-                    )
+                    r.document.add_next_tick_callback(lambda ds=r: ds.patch(patches))
 
         streamable = self._stream(new_data)
 
@@ -217,7 +251,7 @@ class DataModel:  # rename ? "LiveFrame"
         for rds in self._rendered_datasources:
             if rds.document is not None:
                 rds.document.add_next_tick_callback(
-                    lambda ds=rds: setattr(ds, 'data', new_data)
+                    lambda ds=rds: setattr(ds, "data", new_data)
                 )
 
         return self  # to be able to chain updates.
@@ -232,16 +266,24 @@ async def _internal_example():  # async because we need to schedule tasks in bac
     # Note : This is "created" before a document output is known
     # and before a request is sent to the server
     start = datetime.now()
-    ddmodel1 = DataModel(name="ddsource1",
-                         data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)],
-                                               columns=["random1"],
-                                               index=[start, start + timedelta(milliseconds=1)]),
-                         debug=False)
-    ddmodel2 = DataModel(name="ddsource2",
-                         data=pandas.DataFrame(data=[random.randint(-10, 10), random.randint(-10, 10)],
-                                               columns=["random2"],
-                                               index=[start, start + timedelta(milliseconds=1)]),
-                         debug=False)
+    ddmodel1 = DataModel(
+        name="ddsource1",
+        data=pandas.DataFrame(
+            data=[random.randint(-10, 10), random.randint(-10, 10)],
+            columns=["random1"],
+            index=[start, start + timedelta(milliseconds=1)],
+        ),
+        debug=False,
+    )
+    ddmodel2 = DataModel(
+        name="ddsource2",
+        data=pandas.DataFrame(
+            data=[random.randint(-10, 10), random.randint(-10, 10)],
+            columns=["random2"],
+            index=[start, start + timedelta(milliseconds=1)],
+        ),
+        debug=False,
+    )
 
     # Note we add some initial data to have bokeh center the plot properly on the time axis TODO : fix it !
 
@@ -255,20 +297,22 @@ async def _internal_example():  # async because we need to schedule tasks in bac
 
             # push FULL data updates !
             # Note some derivative computation may require more than you think
-            ddmodel1(pandas.DataFrame(
-                columns=["random1"],
-                data={
-                    "random1": [
-                        random.randint(m, M)
-                        for t in range(len(tick))
-                    ]},
-                index=tick
-            ))
+            ddmodel1(
+                pandas.DataFrame(
+                    columns=["random1"],
+                    data={"random1": [random.randint(m, M) for t in range(len(tick))]},
+                    index=tick,
+                )
+            )
 
             # Note : we can trigger only a stream update by calling with the same data + some appended...
-            ddmodel2(ddmodel2.data.append(
-                pandas.DataFrame(data={"random2": [random.randint(m, M)]}, index=[now])
-            ))
+            ddmodel2(
+                ddmodel2.data.append(
+                    pandas.DataFrame(
+                        data={"random2": [random.randint(m, M)]}, index=[now]
+                    )
+                )
+            )
 
             await asyncio.sleep(1)
 
@@ -285,38 +329,66 @@ def _internal_bokeh(doc, example=None):
     exampleview = inspect.getsource(_internal_example)
     thissourceview = inspect.getsource(_internal_bokeh)
     moduleview = inspect.getsource(sys.modules[__name__])
-    mainview = "if __name__ == '__main__':\n" + moduleview.split("if __name__ == '__main__':\n")[-1]
+    mainview = (
+        "if __name__ == '__main__':\n"
+        + moduleview.split("if __name__ == '__main__':\n")[-1]
+    )
 
     # Note: if launched by package, the result of _internal_example is passed via kwargs
     ddmodel1 = example[0]
     ddmodel2 = example[1]
 
     # Debug Bokeh Figure
-    debug_fig = Figure(title="Random Test", plot_height=480,
-                       tools='pan, xwheel_zoom, reset',
-                       toolbar_location="left", y_axis_location="right",
-                       x_axis_type='datetime', sizing_mode="scale_width")
+    debug_fig = Figure(
+        title="Random Test",
+        plot_height=480,
+        tools="pan, xwheel_zoom, reset",
+        toolbar_location="left",
+        y_axis_location="right",
+        x_axis_type="datetime",
+        sizing_mode="scale_width",
+    )
 
     # dynamic datasource plots as simply as possible
-    debug_fig.line(x="index", y="random1", color="blue", source=ddmodel1.source, legend_label="Patch+Stream")
-    debug_fig.line(x="index", y="random2", color="red", source=ddmodel2.source, legend_label="Stream")
+    debug_fig.line(
+        x="index",
+        y="random1",
+        color="blue",
+        source=ddmodel1.source,
+        legend_label="Patch+Stream",
+    )
+    debug_fig.line(
+        x="index",
+        y="random2",
+        color="red",
+        source=ddmodel2.source,
+        legend_label="Stream",
+    )
 
-    doc.add_root(grid(
-        [
-            PreText(text=sourceview),  # TODO : niceties like pygments ??
-            row(column(
-                PreText(text=exampleview),
-                PreText(text=thissourceview),
-                PreText(text=mainview),
-            ),  column(
-                    # to help compare / visually debug
-                    debug_fig, ddmodel1.view.table, ddmodel2.view.table
-            ))
-        ], nrows=2)
+    doc.add_root(
+        grid(
+            [
+                PreText(text=sourceview),  # TODO : niceties like pygments ??
+                row(
+                    column(
+                        PreText(text=exampleview),
+                        PreText(text=thissourceview),
+                        PreText(text=mainview),
+                    ),
+                    column(
+                        # to help compare / visually debug
+                        debug_fig,
+                        ddmodel1.view.table,
+                        ddmodel2.view.table,
+                    ),
+                ),
+            ],
+            nrows=2,
+        )
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
 
     async def main():
@@ -325,15 +397,9 @@ if __name__ == '__main__':
         # initializing example
         example = await _internal_example()
 
-        await monosrv({'/': functools.partial(_internal_bokeh, example=example)})
+        await monosrv({"/": functools.partial(_internal_bokeh, example=example)})
 
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Exiting...")
-
-
-
-
-
-
