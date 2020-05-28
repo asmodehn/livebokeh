@@ -10,6 +10,7 @@ Welcome to livebokeh's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   readme
    livebokeh
    modules
 
