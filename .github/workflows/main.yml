@@ -22,10 +22,23 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip pipenv
         pipenv install --dev
+
     - name: Test with pytest
       run: |
         pipenv run pytest
+
+    - name: Build Docs
+      run: |
+        source $(python -m pipenv --venv)/bin/activate
+        make github
+
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs
