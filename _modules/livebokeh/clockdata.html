@@ -1,0 +1,230 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>livebokeh.clockdata &#8212; livebokeh  documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for livebokeh.clockdata</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">import</span> <span class="nn">pandas</span>
+<span class="kn">import</span> <span class="nn">typing</span>
+
+<span class="kn">from</span> <span class="nn">bokeh.layouts</span> <span class="kn">import</span> <span class="n">column</span><span class="p">,</span> <span class="n">grid</span>
+<span class="kn">from</span> <span class="nn">bokeh.models</span> <span class="kn">import</span> <span class="n">DataTable</span><span class="p">,</span> <span class="n">DateFormatter</span><span class="p">,</span> <span class="n">PreText</span><span class="p">,</span> <span class="n">TableColumn</span>
+<span class="kn">from</span> <span class="nn">bokeh.palettes</span> <span class="kn">import</span> <span class="n">viridis</span>
+<span class="kn">from</span> <span class="nn">bokeh.plotting</span> <span class="kn">import</span> <span class="n">Figure</span>
+
+<span class="kn">from</span> <span class="nn">livebokeh.dataview</span> <span class="kn">import</span> <span class="n">DataView</span>
+<span class="kn">from</span> <span class="nn">.datamodel</span> <span class="kn">import</span> <span class="n">DataModel</span>
+
+
+<div class="viewcode-block" id="Clock"><a class="viewcode-back" href="../../livebokeh.html#livebokeh.clockdata.Clock">[docs]</a><span class="k">class</span> <span class="nc">Clock</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot; A class representing the internal clock of this process as a datamodel.</span>
+<span class="sd">    Note we have two layers of view here.</span>
+<span class="sd">    First one is when we __call__() the Clock instance -&gt; we retrieve timepoints.</span>
+<span class="sd">    Second one is when we decide to display less timepoints than the ones we retrieved...</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">model</span><span class="p">:</span> <span class="n">DataModel</span>  <span class="c1"># Note : both delegation or inheritance could work here...</span>
+
+<div class="viewcode-block" id="Clock.datetime2dataframe"><a class="viewcode-back" href="../../livebokeh.html#livebokeh.clockdata.Clock.datetime2dataframe">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">datetime2dataframe</span><span class="p">(</span><span class="n">dt</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()):</span>
+        <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="p">[[</span><span class="n">dt</span><span class="p">]],</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;datetime&quot;</span><span class="p">],)</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Optional</span><span class="p">[</span><span class="n">DataModel</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">model</span>
+            <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="k">else</span> <span class="n">DataModel</span><span class="p">(</span><span class="n">Clock</span><span class="o">.</span><span class="n">datetime2dataframe</span><span class="p">(),</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Clock&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">period_secs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ttyout</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># no period: one tick only, no return.</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">datetime2dataframe</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="p">)</span>  <span class="c1"># verify_integrity=True))</span>
+
+        <span class="k">if</span> <span class="n">ttyout</span><span class="p">:</span>  <span class="c1"># TODO: proper TUI interface...</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Clock Ticks:</span><span class="se">\n</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">data</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">dataframe</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">data</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">table</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTable</span><span class="p">:</span>  <span class="c1"># TODO : Table is actually another kind of DataView...</span>
+        <span class="sd">&quot;&quot;&quot; Simplest model to visually help debug interactive update.</span>
+<span class="sd">            This does NOT require us to call stream or patch.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">table</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">plot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">plot</span>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>  <span class="c1"># TODO: better typing than str ?</span>
+        <span class="c1"># Clock, like DataModel, is a container.</span>
+        <span class="c1"># However we totally rely on DataModel to manage the derivative graph of clock updates</span>
+
+        <span class="k">def</span> <span class="nf">dt_component_extractor</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+            <span class="sd">&quot;&quot;&quot; extracts components from a datetime instance&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">([</span><span class="nb">getattr</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">item</span><span class="p">],</span> <span class="n">index</span><span class="o">=</span><span class="n">item</span><span class="p">)</span>
+            <span class="c1"># Note : we need to pass a series to retrieve proper columns in dataframe</span>
+
+        <span class="n">extracted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">dt_component_extractor</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Clock</span><span class="p">(</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">extracted</span>
+        <span class="p">)</span>  <span class="c1"># TODO CAREFUL : we should return a Unique clock for the same index</span></div>
+        <span class="c1"># =&gt; keep one related model with multiple sources...</span>
+
+
+<span class="n">clock</span> <span class="o">=</span> <span class="n">Clock</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">_internal_bokeh</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="n">example</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="kn">from</span> <span class="nn">bokeh.layouts</span> <span class="kn">import</span> <span class="n">row</span>
+    <span class="kn">import</span> <span class="nn">asyncio</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">clock_retrieve</span><span class="p">(</span><span class="n">period_secs</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">ttyout</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">asyncio</span>
+
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">period_secs</span><span class="p">)</span>
+            <span class="n">clock</span><span class="p">(</span><span class="n">period_secs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ttyout</span><span class="o">=</span><span class="n">ttyout</span><span class="p">)</span>  <span class="c1"># calling itself synchronously</span>
+
+    <span class="c1"># tick always in background but we retrieve its measurement every second.</span>
+    <span class="n">asyncio</span><span class="o">.</span><span class="n">get_running_loop</span><span class="p">()</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span><span class="n">clock_retrieve</span><span class="p">(</span><span class="n">period_secs</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ttyout</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+    <span class="c1"># TODO : turn off retrieval when document is detached ?</span>
+
+    <span class="n">clocksourceview</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span><span class="p">(</span><span class="n">Clock</span><span class="p">)</span>
+    <span class="n">thissourceview</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span><span class="p">(</span><span class="n">_internal_bokeh</span><span class="p">)</span>
+
+    <span class="n">doc</span><span class="o">.</span><span class="n">add_root</span><span class="p">(</span>
+        <span class="n">grid</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">[</span><span class="n">PreText</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="n">clocksourceview</span><span class="p">),</span> <span class="n">PreText</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="n">thissourceview</span><span class="p">)],</span>
+                <span class="c1"># to help compare / visually debug</span>
+                <span class="p">[</span><span class="n">clock</span><span class="p">[[</span><span class="s2">&quot;minute&quot;</span><span class="p">,</span> <span class="s2">&quot;second&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">plot</span><span class="p">,</span> <span class="n">clock</span><span class="p">[[</span><span class="s2">&quot;minute&quot;</span><span class="p">,</span> <span class="s2">&quot;second&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">table</span><span class="p">],</span>
+                <span class="c1"># Note : even if we create multiple clock instances here,</span>
+                <span class="c1"># the model is the same, and propagation will update all datasources...</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">asyncio</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+        <span class="kn">from</span> <span class="nn">livebokeh.monosrv</span> <span class="kn">import</span> <span class="n">monosrv</span>
+
+        <span class="k">await</span> <span class="n">monosrv</span><span class="p">({</span><span class="s2">&quot;/&quot;</span><span class="p">:</span> <span class="n">_internal_bokeh</span><span class="p">})</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Exiting...&quot;</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">livebokeh</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../readme.html">Readme</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../readme.html#livebokeh">livebokeh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../livebokeh.html">livebokeh package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">livebokeh</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, AlexV.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

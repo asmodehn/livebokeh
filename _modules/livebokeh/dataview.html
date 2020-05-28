@@ -1,0 +1,348 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>livebokeh.dataview &#8212; livebokeh  documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for livebokeh.dataview</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">asyncio</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">typing</span>
+
+<span class="kn">import</span> <span class="nn">bokeh</span>
+<span class="kn">import</span> <span class="nn">pandas</span>
+<span class="kn">from</span> <span class="nn">bokeh.layouts</span> <span class="kn">import</span> <span class="n">column</span><span class="p">,</span> <span class="n">layout</span><span class="p">,</span> <span class="n">row</span>
+<span class="kn">from</span> <span class="nn">bokeh.models</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BooleanFilter</span><span class="p">,</span>
+    <span class="n">CDSView</span><span class="p">,</span>
+    <span class="n">DataTable</span><span class="p">,</span>
+    <span class="n">DateFormatter</span><span class="p">,</span>
+    <span class="n">PreText</span><span class="p">,</span>
+    <span class="n">TableColumn</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">bokeh.palettes</span> <span class="kn">import</span> <span class="n">viridis</span>
+
+<span class="kn">from</span> <span class="nn">livebokeh.datamodel</span> <span class="kn">import</span> <span class="n">DataModel</span>
+<span class="kn">from</span> <span class="nn">bokeh.plotting</span> <span class="kn">import</span> <span class="n">Figure</span>
+
+
+<div class="viewcode-block" id="DataView"><a class="viewcode-back" href="../../livebokeh.html#livebokeh.dataview.DataView">[docs]</a><span class="k">class</span> <span class="nc">DataView</span><span class="p">:</span>  <span class="c1"># rename ? &quot;LiveFrameView&quot;</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A View of the model, will render a row-subset of the model.</span>
+<span class="sd">    Note : implicitely a DataView will display *all* columns of the model.</span>
+<span class="sd">    If this is not what is desired, a DataProcess should be put in place to transform the DataModel.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># TODO : some plot visualisation in terminal ...</span>
+
+    <span class="c1"># TODO : Do we need model here, or can we just rely on ColumnDataSource from bokeh ?</span>
+    <span class="c1">#        BETTER: DataView and DataModel would be usable separately.</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">model</span><span class="p">:</span> <span class="n">DataModel</span><span class="p">,</span>
+        <span class="nb">filter</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Optional</span><span class="p">[</span><span class="n">typing</span><span class="o">.</span><span class="n">Callable</span><span class="p">[[</span><span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">],</span> <span class="nb">bool</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>  <span class="c1"># Note : typing.Any represent the type of the row tuple</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
+        <span class="c1"># Note : views here should be &quot;per-line&quot; of data</span>
+        <span class="c1"># Note : potentially a model is already a view (root of view tree... cf Ahman&#39;s Containers...)</span>
+        <span class="c1"># For a &quot;per-column&quot; view -&gt; model needs to be transformed (via a dataprocess)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter</span> <span class="o">=</span> <span class="nb">filter</span>
+
+        <span class="c1"># we always render ALL columns here. otherwise change your datamodel.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_table_columns</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">TableColumn</span><span class="p">(</span>
+                <span class="n">field</span><span class="o">=</span><span class="n">f</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">f</span><span class="p">,</span> <span class="n">formatter</span><span class="o">=</span><span class="n">DateFormatter</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">&quot;%m/</span><span class="si">%d</span><span class="s2">/%Y %H:%M:%S&quot;</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">is_datetime64_any_dtype</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">dtypes</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span>
+            <span class="k">else</span> <span class="n">TableColumn</span><span class="p">(</span><span class="n">field</span><span class="o">=</span><span class="n">f</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">f</span><span class="p">)</span>  <span class="c1"># CAREFUL with index</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+        <span class="p">]</span>
+
+        <span class="c1"># TODO : some clever introspection of model to find most appropriate arguments...</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_table_args</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;sortable&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;reorderable&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;index_position&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_plot_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+<div class="viewcode-block" id="DataView.bokeh_view"><a class="viewcode-back" href="../../livebokeh.html#livebokeh.dataview.DataView.bokeh_view">[docs]</a>    <span class="k">def</span> <span class="nf">bokeh_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ignore_filters</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; because we need a new view for each document request...</span>
+
+<span class="sd">        ignore filters allow some glyph renderer not supporting filters to ignore them</span>
+<span class="sd">        rendering everything instead of breaking...</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">ignore_filters</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">view</span> <span class="o">=</span> <span class="n">CDSView</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>  <span class="c1"># defaults to complete view.</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">boolfilter</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">itertuples</span><span class="p">()</span>
+            <span class="p">]</span>  <span class="c1"># TODO : This should be recreated at  everytick ?!?!</span>
+            <span class="c1"># TODO : model iterable on rows ?</span>
+
+            <span class="n">view</span> <span class="o">=</span> <span class="n">CDSView</span><span class="p">(</span>
+                <span class="n">source</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">source</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="p">[</span><span class="n">BooleanFilter</span><span class="p">(</span><span class="n">boolfilter</span><span class="p">)]</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">view</span></div>
+
+<div class="viewcode-block" id="DataView.table_args"><a class="viewcode-back" href="../../livebokeh.html#livebokeh.dataview.DataView.table_args">[docs]</a>    <span class="k">def</span> <span class="nf">table_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">datatable_kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_table_args</span> <span class="o">=</span> <span class="n">datatable_kwargs</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">table</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Note : index position is None, as that index (not a column) seems not usable in plots...)</span>
+
+        <span class="c1"># instantiating view on render</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bokeh_view</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">DataTable</span><span class="p">(</span>
+            <span class="n">source</span><span class="o">=</span><span class="n">view</span><span class="o">.</span><span class="n">source</span><span class="p">,</span>
+            <span class="n">view</span><span class="o">=</span><span class="n">view</span><span class="p">,</span>
+            <span class="n">columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_columns</span><span class="p">,</span>
+            <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_args</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="DataView.plot_args"><a class="viewcode-back" href="../../livebokeh.html#livebokeh.dataview.DataView.plot_args">[docs]</a>    <span class="k">def</span> <span class="nf">plot_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">figure_kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_plot_args</span> <span class="o">=</span> <span class="n">figure_kwargs</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">plot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">figure</span> <span class="o">=</span> <span class="n">Figure</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_plot_args</span><span class="p">)</span>
+
+        <span class="n">palette</span> <span class="o">=</span> <span class="n">viridis</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">))</span>
+        <span class="n">color_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">c</span><span class="p">:</span> <span class="n">palette</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">)}</span>
+
+        <span class="c1"># instantiating view on render</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bokeh_view</span><span class="p">(</span><span class="n">ignore_filters</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># by default : lines</span>
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="c1"># CAREFUL : CDSView used by Glyph renderer must have a source that matches the Glyph renderer&#39;s data source</span>
+            <span class="n">figure</span><span class="o">.</span><span class="n">line</span><span class="p">(</span>
+                <span class="n">source</span><span class="o">=</span><span class="n">view</span><span class="o">.</span><span class="n">source</span><span class="p">,</span>
+                <span class="n">view</span><span class="o">=</span><span class="n">view</span><span class="p">,</span>
+                <span class="n">x</span><span class="o">=</span><span class="s2">&quot;index&quot;</span><span class="p">,</span>
+                <span class="n">y</span><span class="o">=</span><span class="n">c</span><span class="p">,</span>
+                <span class="n">color</span><span class="o">=</span><span class="n">color_index</span><span class="p">[</span><span class="n">c</span><span class="p">],</span>
+                <span class="n">legend_label</span><span class="o">=</span><span class="n">c</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">figure</span></div>
+
+    <span class="c1"># TODO : more plots</span>
+
+
+<span class="k">async</span> <span class="k">def</span> <span class="nf">_internal_example</span><span class="p">():</span>
+    <span class="c1"># Minimal server test</span>
+    <span class="kn">import</span> <span class="nn">random</span>
+    <span class="kn">import</span> <span class="nn">asyncio</span>
+    <span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+
+    <span class="c1"># Note : This is &quot;created&quot; before a document output is known</span>
+    <span class="c1"># and before a request is sent to the server</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+    <span class="n">random_data_model</span> <span class="o">=</span> <span class="n">DataModel</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;random_data_model&quot;</span><span class="p">,</span>
+        <span class="n">data</span><span class="o">=</span><span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+            <span class="n">data</span><span class="o">=</span><span class="p">[</span>
+                <span class="p">[</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)],</span>
+                <span class="p">[</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)],</span>
+            <span class="p">],</span>
+            <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;random1&quot;</span><span class="p">,</span> <span class="s2">&quot;random2&quot;</span><span class="p">],</span>
+            <span class="n">index</span><span class="o">=</span><span class="p">[</span><span class="n">start</span><span class="p">,</span> <span class="n">start</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">milliseconds</span><span class="o">=</span><span class="mi">1</span><span class="p">)],</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Note : This is &quot;created&quot; before a document output is known and before a request is sent to the server</span>
+    <span class="n">view</span> <span class="o">=</span> <span class="n">DataView</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="n">random_data_model</span><span class="p">)</span>
+    <span class="n">view</span><span class="o">.</span><span class="n">plot_args</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Random Test&quot;</span><span class="p">,</span>
+        <span class="n">plot_height</span><span class="o">=</span><span class="mi">480</span><span class="p">,</span>
+        <span class="n">tools</span><span class="o">=</span><span class="s2">&quot;xpan, xwheel_zoom, reset&quot;</span><span class="p">,</span>
+        <span class="n">toolbar_location</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">,</span>
+        <span class="n">y_axis_location</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">,</span>
+        <span class="n">x_axis_type</span><span class="o">=</span><span class="s2">&quot;datetime&quot;</span><span class="p">,</span>
+        <span class="n">sizing_mode</span><span class="o">=</span><span class="s2">&quot;scale_width&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># filtering view on the left</span>
+    <span class="n">fview</span> <span class="o">=</span> <span class="n">DataView</span><span class="p">(</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">random_data_model</span><span class="p">,</span>
+        <span class="nb">filter</span><span class="o">=</span>
+        <span class="c1"># only show when random2 values are positive</span>
+        <span class="k">lambda</span> <span class="n">dt</span><span class="p">:</span> <span class="n">dt</span><span class="o">.</span><span class="n">random2</span> <span class="o">&gt;</span> <span class="mi">0</span>  <span class="c1"># TODO : convert to pandas syntax... somehow</span>
+        <span class="c1"># here (dimension -1) we are talking about attributes, not columns...</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Producer as a background task</span>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">compute_random</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">M</span><span class="p">):</span>
+        <span class="n">tick</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">random_data_model</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+        <span class="p">)</span>  <span class="c1"># to help with full data generation</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+            <span class="n">tick</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>  <span class="c1"># print in console for explicitness</span>
+
+            <span class="n">new_data</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;random1&quot;</span><span class="p">:</span> <span class="p">[</span>
+                    <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">M</span><span class="p">)</span>  <span class="c1"># change everything to trigger patch</span>
+                    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">tick</span><span class="p">))</span>  <span class="c1"># + 1 extra element to stream</span>
+                <span class="p">],</span>
+                <span class="s2">&quot;random2&quot;</span><span class="p">:</span> <span class="n">random_data_model</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;random2&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+                <span class="o">+</span> <span class="p">[</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">M</span><span class="p">)],</span>  <span class="c1"># only add one element to stream</span>
+            <span class="p">}</span>
+
+            <span class="c1"># push FULL data updates !</span>
+            <span class="c1"># Note some derivative computation may require more than you think</span>
+            <span class="n">random_data_model</span><span class="p">(</span>
+                <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+                    <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;random1&quot;</span><span class="p">,</span> <span class="s2">&quot;random2&quot;</span><span class="p">],</span> <span class="n">data</span><span class="o">=</span><span class="n">new_data</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">tick</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># bg async task...</span>
+    <span class="n">asyncio</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span><span class="n">compute_random</span><span class="p">(</span><span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">random_data_model</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">fview</span>
+
+
+<span class="k">def</span> <span class="nf">_internal_bokeh</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="n">example</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+    <span class="c1"># Note: if launched by package, the result of _internal_example is passed via kwargs</span>
+    <span class="n">random_data_model</span> <span class="o">=</span> <span class="n">example</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">view</span> <span class="o">=</span> <span class="n">example</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">fview</span> <span class="o">=</span> <span class="n">example</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="n">moduleview</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="vm">__name__</span><span class="p">])</span>
+
+    <span class="n">doc</span><span class="o">.</span><span class="n">add_root</span><span class="p">(</span>
+        <span class="n">layout</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">[</span>  <span class="c1"># we want one row with two columns</span>
+                    <span class="p">[</span><span class="n">PreText</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="n">moduleview</span><span class="p">)],</span>
+                    <span class="p">[</span><span class="n">fview</span><span class="o">.</span><span class="n">plot</span><span class="p">,</span> <span class="n">random_data_model</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">table</span><span class="p">,</span> <span class="n">view</span><span class="o">.</span><span class="n">plot</span><span class="p">],</span>
+                <span class="p">]</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+
+        <span class="kn">from</span> <span class="nn">livebokeh.monosrv</span> <span class="kn">import</span> <span class="n">monosrv</span>
+
+        <span class="c1"># initializing example</span>
+        <span class="n">example</span> <span class="o">=</span> <span class="k">await</span> <span class="n">_internal_example</span><span class="p">()</span>
+
+        <span class="k">await</span> <span class="n">monosrv</span><span class="p">({</span><span class="s2">&quot;/&quot;</span><span class="p">:</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">_internal_bokeh</span><span class="p">,</span> <span class="n">example</span><span class="o">=</span><span class="n">example</span><span class="p">)})</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Exiting...&quot;</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">livebokeh</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../readme.html">Readme</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../readme.html#livebokeh">livebokeh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../livebokeh.html">livebokeh package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">livebokeh</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, AlexV.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

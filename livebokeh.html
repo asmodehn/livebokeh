@@ -1,0 +1,261 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>livebokeh package &#8212; livebokeh  documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="livebokeh" href="modules.html" />
+    <link rel="prev" title="Readme" href="readme.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="livebokeh-package">
+<h1>livebokeh package<a class="headerlink" href="#livebokeh-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-livebokeh.clockdata">
+<span id="livebokeh-clockdata-module"></span><h2>livebokeh.clockdata module<a class="headerlink" href="#module-livebokeh.clockdata" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="livebokeh.clockdata.Clock">
+<em class="property">class </em><code class="sig-prename descclassname">livebokeh.clockdata.</code><code class="sig-name descname">Clock</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#livebokeh.datamodel.DataModel" title="livebokeh.datamodel.DataModel">livebokeh.datamodel.DataModel</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/clockdata.html#Clock"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.clockdata.Clock" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A class representing the internal clock of this process as a datamodel.
+Note we have two layers of view here.
+First one is when we __call__() the Clock instance -&gt; we retrieve timepoints.
+Second one is when we decide to display less timepoints than the ones we retrieved…</p>
+<dl class="py method">
+<dt id="livebokeh.clockdata.Clock.dataframe">
+<em class="property">property </em><code class="sig-name descname">dataframe</code><a class="headerlink" href="#livebokeh.clockdata.Clock.dataframe" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.clockdata.Clock.datetime2dataframe">
+<em class="property">static </em><code class="sig-name descname">datetime2dataframe</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">dt</span><span class="p">:</span> <span class="n">datetime.datetime</span> <span class="o">=</span> <span class="default_value">datetime.datetime(2020, 5, 28, 15, 13, 7, 442779)</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/clockdata.html#Clock.datetime2dataframe"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.clockdata.Clock.datetime2dataframe" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="livebokeh.clockdata.Clock.model">
+<code class="sig-name descname">model</code><em class="property">: DataModel</em><em class="property"> = None</em><a class="headerlink" href="#livebokeh.clockdata.Clock.model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.clockdata.Clock.plot">
+<em class="property">property </em><code class="sig-name descname">plot</code><a class="headerlink" href="#livebokeh.clockdata.Clock.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.clockdata.Clock.table">
+<em class="property">property </em><code class="sig-name descname">table</code><a class="headerlink" href="#livebokeh.clockdata.Clock.table" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simplest model to visually help debug interactive update.
+This does NOT require us to call stream or patch.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-livebokeh.datamodel">
+<span id="livebokeh-datamodel-module"></span><h2>livebokeh.datamodel module<a class="headerlink" href="#module-livebokeh.datamodel" title="Permalink to this headline">¶</a></h2>
+<p>Data Driven Bokeh</p>
+<dl class="py class">
+<dt id="livebokeh.datamodel.DataModel">
+<em class="property">class </em><code class="sig-prename descclassname">livebokeh.datamodel.</code><code class="sig-name descname">DataModel</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span><span class="p">:</span> <span class="n">pandas.core.frame.DataFrame</span></em>, <em class="sig-param"><span class="n">name</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">debug</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/datamodel.html#DataModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.datamodel.DataModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt id="livebokeh.datamodel.DataModel.apply">
+<code class="sig-name descname">apply</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">elem_fun</span><span class="p">:</span> <span class="n">Callable<span class="p">[</span><span class="p">[</span>Any<span class="p">]</span><span class="p">, </span>Any<span class="p">]</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/datamodel.html#DataModel.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.datamodel.DataModel.apply" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.datamodel.DataModel.columns">
+<em class="property">property </em><code class="sig-name descname">columns</code><a class="headerlink" href="#livebokeh.datamodel.DataModel.columns" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.datamodel.DataModel.data">
+<em class="property">property </em><code class="sig-name descname">data</code><a class="headerlink" href="#livebokeh.datamodel.DataModel.data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.datamodel.DataModel.source">
+<em class="property">property </em><code class="sig-name descname">source</code><a class="headerlink" href="#livebokeh.datamodel.DataModel.source" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.datamodel.DataModel.view">
+<em class="property">property </em><code class="sig-name descname">view</code><a class="headerlink" href="#livebokeh.datamodel.DataModel.view" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-livebokeh.dataview">
+<span id="livebokeh-dataview-module"></span><h2>livebokeh.dataview module<a class="headerlink" href="#module-livebokeh.dataview" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="livebokeh.dataview.DataView">
+<em class="property">class </em><code class="sig-prename descclassname">livebokeh.dataview.</code><code class="sig-name descname">DataView</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#livebokeh.datamodel.DataModel" title="livebokeh.datamodel.DataModel">livebokeh.datamodel.DataModel</a></span></em>, <em class="sig-param"><span class="n">filter</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>Callable<span class="p">[</span><span class="p">[</span>Any<span class="p">]</span><span class="p">, </span>bool<span class="p">]</span><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/dataview.html#DataView"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.dataview.DataView" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A View of the model, will render a row-subset of the model.
+Note : implicitely a DataView will display <em>all</em> columns of the model.
+If this is not what is desired, a DataProcess should be put in place to transform the DataModel.</p>
+<dl class="py method">
+<dt id="livebokeh.dataview.DataView.bokeh_view">
+<code class="sig-name descname">bokeh_view</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ignore_filters</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/dataview.html#DataView.bokeh_view"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.dataview.DataView.bokeh_view" title="Permalink to this definition">¶</a></dt>
+<dd><p>because we need a new view for each document request…</p>
+<p>ignore filters allow some glyph renderer not supporting filters to ignore them
+rendering everything instead of breaking…</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.dataview.DataView.plot">
+<em class="property">property </em><code class="sig-name descname">plot</code><a class="headerlink" href="#livebokeh.dataview.DataView.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.dataview.DataView.plot_args">
+<code class="sig-name descname">plot_args</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">figure_kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/dataview.html#DataView.plot_args"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.dataview.DataView.plot_args" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.dataview.DataView.table">
+<em class="property">property </em><code class="sig-name descname">table</code><a class="headerlink" href="#livebokeh.dataview.DataView.table" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="livebokeh.dataview.DataView.table_args">
+<code class="sig-name descname">table_args</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">datatable_kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/dataview.html#DataView.table_args"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.dataview.DataView.table_args" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="livebokeh-liveelem-module">
+<h2>livebokeh.liveelem module<a class="headerlink" href="#livebokeh-liveelem-module" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="livebokeh-livetype-module">
+<h2>livebokeh.livetype module<a class="headerlink" href="#livebokeh-livetype-module" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-livebokeh.monosrv">
+<span id="livebokeh-monosrv-module"></span><h2>livebokeh.monosrv module<a class="headerlink" href="#module-livebokeh.monosrv" title="Permalink to this headline">¶</a></h2>
+<p>A minimalist async server for visualization</p>
+<dl class="py function">
+<dt id="livebokeh.monosrv.monosrv">
+<em class="property">async </em><code class="sig-prename descclassname">livebokeh.monosrv.</code><code class="sig-name descname">monosrv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">applications</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Callable<span class="p">[</span><span class="p">[</span>bokeh.document.document.Document<span class="p">]</span><span class="p">, </span>Any<span class="p">]</span><span class="p">]</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/livebokeh/monosrv.html#monosrv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#livebokeh.monosrv.monosrv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Async server runner, to force the eventloop -same as the server loop- to be already running…</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-livebokeh">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-livebokeh" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">livebokeh</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="readme.html">Readme</a></li>
+<li class="toctree-l1"><a class="reference internal" href="readme.html#livebokeh">livebokeh</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">livebokeh package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-livebokeh.clockdata">livebokeh.clockdata module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-livebokeh.datamodel">livebokeh.datamodel module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-livebokeh.dataview">livebokeh.dataview module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#livebokeh-liveelem-module">livebokeh.liveelem module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#livebokeh-livetype-module">livebokeh.livetype module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-livebokeh.monosrv">livebokeh.monosrv module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-livebokeh">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">livebokeh</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">livebokeh package</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="readme.html" title="previous chapter">Readme</a></li>
+      <li>Next: <a href="modules.html" title="next chapter">livebokeh</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, AlexV.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/livebokeh.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
