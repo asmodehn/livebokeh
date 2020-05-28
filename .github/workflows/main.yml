@@ -35,7 +35,7 @@ jobs:
     - name: Build Docs
       run: |
         source $(python -m pipenv --venv)/bin/activate
-        make html
+        cd ./docs && make html
 
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
