@@ -6,7 +6,7 @@ import sys
 import typing
 
 from bokeh.document import Document
-from bokeh.layouts import column
+from bokeh.layouts import column, layout
 from bokeh.models import PreText
 from bokeh.server.server import Server as BokehServer
 
@@ -33,24 +33,14 @@ async def monosrv(
 def _internal_bokeh(doc, example=None):
     import inspect
 
-    sourceview = inspect.getsource(monosrv)
-    thissourceview = inspect.getsource(_internal_bokeh)
     moduleview = inspect.getsource(sys.modules[__name__])
-    mainview = (
-        "if __name__ == '__main__':\n"
-        + moduleview.split("if __name__ == '__main__':\n")[-1]
-    )
     doc.add_root(
-        column(
-            PreText(text=sourceview),  # TODO : niceties like pygments ??
-            PreText(text=thissourceview),
-            PreText(text=mainview),
-        )
+        layout([PreText(text=moduleview),])  # TODO : niceties like pygments ??
     )
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(livemain([monosrv({"/": _internal_bokeh})]))
+        asyncio.run(monosrv({"/": _internal_bokeh}))
     except KeyboardInterrupt:
         print("Exiting...")

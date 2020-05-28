@@ -11,7 +11,7 @@ from collections import namedtuple
 import pandas
 import typing
 from bokeh.document import Document
-from bokeh.layouts import column, grid, row
+from bokeh.layouts import column, grid, layout, row
 from bokeh.plotting import Figure
 from bokeh.models import (
     ColumnDataSource,
@@ -84,6 +84,15 @@ class DataModel:  # rename ? "LiveFrame"
                 for col, pseries in patchable.reset_index(drop=True).items():
                     patches[col] = [t for t in pseries.items()]
 
+        # asserting the quality of patches (to have a chance to break early and debug)
+        # for c, p in patches.items():
+        #     assert c in self._data.columns, f"{c} not in {self._data.columns}"
+        #     for pe in p:
+        #         assert 0 <= pe[0] < len(self._data[c]), f"Patch index should be {0} <= {pe[0]} < {len (self._data[c])}"
+
+        # TODO: investigate exception on document load : ValueError: Out-of bounds index (3) in patch for column: random1
+        # PRobably teh patch is computed against data, but the document data is not uptodate ?
+
         return patches
 
     @property
@@ -126,7 +135,7 @@ class DataModel:  # rename ? "LiveFrame"
         self._related_models = dict()
 
     # TODO : cleaner API. This is one of apply|map|applymap of pandas. we should probably stay close to their API...
-    def lift(self, elem_fun: typing.Callable[[typing.Any], typing.Any]):
+    def apply(self, elem_fun: typing.Callable[[typing.Any], typing.Any]):
         # some sort of fmap implementation, keeping track of compute relations, enabling updates.
 
         # CAREFUL : we need to guarantee unicity (=> pure elem function!) here, to keep compute graph tractable:
@@ -135,7 +144,7 @@ class DataModel:  # rename ? "LiveFrame"
             # we use hte bytecode hash as unique identifier for the function
             return self._related_models[
                 funstuff["__code__"]
-            ]  # CAREFUL with datasources and views
+            ]()  # CAREFUL with datasources and views
 
         sig = inspect.signature(elem_fun)
 
@@ -152,20 +161,18 @@ class DataModel:  # rename ? "LiveFrame"
                     debug=True,
                 )
 
-                # we store the (runnable/updatable) relation
+                # CAREFUL: we store the runnable/updatable relation !
                 model_in._related_models[funstuff["__code__"]] = functools.partial(
                     wrapped, model_in=model_in, model_out=model_out
                 )
             return model_out
 
-        # TODO : static lift...
         # the lifted function will immediately get model_in=self, since we are using this instance's list()...
-        self_wrapped = functools.partial(wrapped, model_in=self)
-        return self_wrapped
+        return wrapped(model_in=self)
 
     def __getitem__(self, item: typing.List[str]):  # TODO: better typing than str ?
+        #  indexing by columns (operation on types), comparable to type indexed families, see Martin-Loef Type Theory
         #  somewhat dual to DataView indexing by rows / elements (operation on values)
-        #  comparable to type indexed families, see Martin-Loef Type Theory (operation on types)
 
         if isinstance(
             item, list
@@ -173,7 +180,9 @@ class DataModel:  # rename ? "LiveFrame"
 
             # CAREFUL : we should guarantee unicity here, because of compute storage:
             if item in self._related_models:
-                return self._related_models[item]  # CAREFUL with datasources and views
+                return self._related_models[
+                    item
+                ]()  # CAREFUL with datasources and views
 
             # Note : __getitem__ is already lifted by pandas,
             # and we don't want to slow it down (by going down to rows and back)
@@ -325,14 +334,7 @@ async def _internal_example():  # async because we need to schedule tasks in bac
 
 
 def _internal_bokeh(doc, example=None):
-    sourceview = inspect.getsource(DataModel)
-    exampleview = inspect.getsource(_internal_example)
-    thissourceview = inspect.getsource(_internal_bokeh)
     moduleview = inspect.getsource(sys.modules[__name__])
-    mainview = (
-        "if __name__ == '__main__':\n"
-        + moduleview.split("if __name__ == '__main__':\n")[-1]
-    )
 
     # Note: if launched by package, the result of _internal_example is passed via kwargs
     ddmodel1 = example[0]
@@ -348,7 +350,7 @@ def _internal_bokeh(doc, example=None):
         x_axis_type="datetime",
         sizing_mode="scale_width",
     )
-
+    # TODO : use DataView.plot instead...
     # dynamic datasource plots as simply as possible
     debug_fig.line(
         x="index",
@@ -366,24 +368,18 @@ def _internal_bokeh(doc, example=None):
     )
 
     doc.add_root(
-        grid(
+        layout(
             [
-                PreText(text=sourceview),  # TODO : niceties like pygments ??
-                row(
-                    column(
-                        PreText(text=exampleview),
-                        PreText(text=thissourceview),
-                        PreText(text=mainview),
-                    ),
-                    column(
+                [  # we want one row with two columns
+                    [PreText(text=moduleview)],  # TODO : niceties like pygments ??
+                    [
                         # to help compare / visually debug
                         debug_fig,
                         ddmodel1.view.table,
                         ddmodel2.view.table,
-                    ),
-                ),
+                    ],
+                ]
             ],
-            nrows=2,
         )
     )
 

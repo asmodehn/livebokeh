@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import pandas
 import typing
 
-from bokeh.layouts import column
+from bokeh.layouts import column, grid
 from bokeh.models import DataTable, DateFormatter, PreText, TableColumn
 from bokeh.palettes import viridis
 from bokeh.plotting import Figure
@@ -71,13 +71,10 @@ class Clock:
             return pandas.Series([getattr(dt.datetime, a) for a in item], index=item)
             # Note : we need to pass a series to retrieve proper columns in dataframe
 
-        dt_extractor = self.model.lift(dt_component_extractor)
-        extracted = (
-            dt_extractor()
-        )  # running the lifted getattr... # TODO : better (more pandas-like) way ?
+        extracted = self.model.apply(dt_component_extractor)
         return Clock(
             model=extracted
-        )  # TODO CAREFUL : we should return a Unique clock for hte same index
+        )  # TODO CAREFUL : we should return a Unique clock for the same index
         # => keep one related model with multiple sources...
 
 
@@ -103,11 +100,15 @@ def _internal_bokeh(doc, example=None):
     thissourceview = inspect.getsource(_internal_bokeh)
 
     doc.add_root(
-        column(PreText(text=clocksourceview), PreText(text=thissourceview)),
-        # to help compare / visually debug
-        column(clock[["minute", "second"]].plot, clock[["minute", "second"]].table)
-        # Note : even if we create multiple clock instances here,
-        # the model is the same, and propagation will update all datasources...
+        grid(
+            [
+                [PreText(text=clocksourceview), PreText(text=thissourceview)],
+                # to help compare / visually debug
+                [clock[["minute", "second"]].plot, clock[["minute", "second"]].table],
+                # Note : even if we create multiple clock instances here,
+                # the model is the same, and propagation will update all datasources...
+            ]
+        )
     )
 
 
