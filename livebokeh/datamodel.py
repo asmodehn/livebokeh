@@ -112,14 +112,15 @@ class DataModel:  # rename ? "LiveFrame"
         from livebokeh.dataview import DataView
 
         return DataView(
-            model=self
+            model=self,
         )  # DataModel doesnt need to keep track of views, bokeh does this already.
 
     """ class representing one viewplot - potentially rendered in multiple documents """
 
-    def __init__(self, data: pandas.DataFrame, name: str, debug=True):
+    def __init__(self, data: pandas.DataFrame, name: str, debug=True, optimized=False):
         self._debug = debug
         self._name = name
+        self.optimized = optimized  # to do patch and stream on data update
 
         # make sure index values are unique (set semantics, or some operations might fail later on...)
         if not data.index.is_unique:
@@ -133,6 +134,48 @@ class DataModel:  # rename ? "LiveFrame"
         # a set here is fine, it is never included in the bokeh document
 
         self._related_models = dict()
+
+    # like apply, but no lifting...
+    def relate(
+        self,
+        table_fun: typing.Callable[[pandas.DataFrame], pandas.DataFrame],
+        column=None,
+    ):
+
+        # CAREFUL : we need to guarantee unicity (=> pure elem function!) here, to keep compute graph tractable:
+        funstuff = {n: v for n, v in inspect.getmembers(table_fun)}
+        if funstuff["__code__"] in self._related_models:
+            # we use hte bytecode hash as unique identifier for the function
+            return self._related_models[
+                funstuff["__code__"]
+            ]()  # CAREFUL with datasources and views
+
+        sig = inspect.signature(table_fun)
+
+        def wrapped(model_in: DataModel, model_out: typing.Optional[DataModel] = None):
+            if column:  # result integrated as a column
+                new_data = model_in.data
+                new_data[column] = table_fun(model_in.data)
+            else:  # completely different model...
+                new_data = table_fun(model_in.data)
+
+            if model_out is not None:  # already exists, we just modify its data
+                model_out(new_data=new_data)
+            else:  # the first time
+                model_out = DataModel(
+                    data=new_data,
+                    name=f"{model_in._name} {sig.return_annotation}",  # TODO : refine naming types/models here...
+                    debug=True,
+                )
+
+                # CAREFUL: we store the runnable/updatable relation !
+                model_in._related_models[funstuff["__code__"]] = functools.partial(
+                    wrapped, model_in=model_in, model_out=model_out
+                )
+            return model_out
+
+        # the lifted function will immediately get model_in=self, since we are using this instance's list()...
+        return wrapped(model_in=self)
 
     # TODO : cleaner API. This is one of apply|map|applymap of pandas. we should probably stay close to their API...
     def apply(self, elem_fun: typing.Callable[[typing.Any], typing.Any]):
@@ -148,6 +191,7 @@ class DataModel:  # rename ? "LiveFrame"
 
         sig = inspect.signature(elem_fun)
 
+        # TODO : we also need to do that without the lifting part... just store a process on dataframes...
         def wrapped(model_in: DataModel, model_out: typing.Optional[DataModel] = None):
             new_data = model_in.data.apply(
                 elem_fun, axis="columns", result_type="expand"
@@ -211,6 +255,8 @@ class DataModel:  # rename ? "LiveFrame"
 
             # cf Ahman's containers for theoretical background here: https://danel.ahman.ee/papers/msfp16.pdf
             return wrapped(self)
+        elif isinstance(item, str):  # just accessing a column data...
+            raise NotImplementedError
         else:  # TODO maybe
             raise NotImplementedError
 
@@ -231,32 +277,36 @@ class DataModel:  # rename ? "LiveFrame"
                 "If in doubt, keep pandas' default index."
             )
 
-        patches = self._patch(new_data)
-
-        if patches:
-            for r in self._rendered_datasources:
-                if r.document is not None:
-                    r.document.add_next_tick_callback(lambda ds=r: ds.patch(patches))
-
-        streamable = self._stream(new_data)
-
-        if not streamable.empty:
-            for r in self._rendered_datasources:
-                if r.document is not None:
-                    r.document.add_next_tick_callback(
-                        lambda ds=r: ds.stream(streamable),
-                    )
-
-        # Replace data here and in existing datasources.
-        # BUT it will NOT trigger redraw of the various plots, we rely on stream or patch for that.
-        self._data = new_data
-
-        # We also do the same for related models
+        # We compute related models (some may be columns in this frame...)
         for code, runnable in self._related_models.items():
             print(f"propagating update for {code}")
             runnable()  # already contains domain and codomain - with new data-, here we just press the trigger.
 
-        # Note this is necessary for further patches to work correctly and not get out of bounds.
+        # Note : This is an optimization and should not be necessary
+        if self.optimized:
+            # send updates to render
+            patches = self._patch(new_data)
+
+            if patches:
+                for r in self._rendered_datasources:
+                    if r.document is not None:
+                        r.document.add_next_tick_callback(
+                            lambda ds=r: ds.patch(patches)
+                        )
+
+            streamable = self._stream(new_data)
+
+            if not streamable.empty:
+                for r in self._rendered_datasources:
+                    if r.document is not None:
+                        r.document.add_next_tick_callback(
+                            lambda ds=r: ds.stream(streamable),
+                        )
+
+        # Replace data here and in existing datasources.
+        self._data = new_data
+
+        # Note this is necessary for updates and for further patches to not get out of bounds.
         for rds in self._rendered_datasources:
             if rds.document is not None:
                 rds.document.add_next_tick_callback(

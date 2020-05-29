@@ -12,6 +12,7 @@ from bokeh.models import (
     CDSView,
     DataTable,
     DateFormatter,
+    GroupFilter,
     PreText,
     TableColumn,
 )
@@ -29,6 +30,16 @@ class DataView:  # rename ? "LiveFrameView"
 
     """
 
+    # Note : the keys of hte dit match the column of the view DF
+    views: pandas.DataFrame
+
+    filter_columns: str
+    category: str
+
+    # in a sense, the compute graph of views indexed from this one (one level only)...
+    # TODO : needed or cleanup ?
+    _related_views: typing.Dict[typing.List[str], functools.partial]
+
     # TODO : some plot visualisation in terminal ...
 
     # TODO : Do we need model here, or can we just rely on ColumnDataSource from bokeh ?
@@ -36,14 +47,24 @@ class DataView:  # rename ? "LiveFrameView"
     def __init__(
         self,
         model: DataModel,
-        filter: typing.Optional[typing.Callable[[typing.Any], bool]] = None,
+        filter_column: typing.Optional[str] = None,  # TODO list
+        category: typing.Optional[
+            str
+        ] = None,  # None means all, something means only this one ( groupfilter )  # TODO BETTER !!!
+        # Note: filters that require computation on updates should be handled in the DataModel
     ):  # Note : typing.Any represent the type of the row tuple
         self.model = model
         # Note : views here should be "per-line" of data
         # Note : potentially a model is already a view (root of view tree... cf Ahman's Containers...)
         # For a "per-column" view -> model needs to be transformed (via a dataprocess)
 
-        self.filter = filter
+        self.filter_column = (
+            filter_column if filter_column is not None else self.model.data.index.name
+        )
+        assert self.filter_column in [self.model.data.index.name, *self.model.columns]
+
+        # => maybe use a special "related" frame in model, only for view and filters TODO...
+        self.category = category
 
         # we always render ALL columns here. otherwise change your datamodel.
         self._table_columns = [
@@ -69,18 +90,41 @@ class DataView:  # rename ? "LiveFrameView"
         ignore filters allow some glyph renderer not supporting filters to ignore them
         rendering everything instead of breaking...
         """
-        if ignore_filters or self.filter is None:
+        if ignore_filters or self.category is None:
             view = CDSView(source=self.model.source)  # defaults to complete view.
         else:
-            boolfilter = [
-                self.filter(r) for r in self.model.data.itertuples()
-            ]  # TODO : This should be recreated at  everytick ?!?!
-            # TODO : model iterable on rows ?
-
             view = CDSView(
-                source=self.model.source, filters=[BooleanFilter(boolfilter)]
+                source=self.model.source,
+                filters=[
+                    GroupFilter(column_name=self.filter_column, group=self.category)
+                ],
             )
+
+            # fs = dict()
+            # # updating filters (changes may have happened since view creation)
+            # # Ref : https://docs.bokeh.org/en/latest/docs/user_guide/data.html#groupfilter
+            # for f in self.filter:
+            #     self.views[f] = self.filter[f](self.model.data)
+            #     fs[f] = [GroupFilter(column_name=f, group=g) for g in self.model.data[f].unique()]
+            #
+            # # Note: This is related to https://pandas.pydata.org/pandas-docs/stable/user_guide/categorical.html
+            #
+            # boolfilter = [
+            #     self.filter(r) for r in self.model.data.itertuples()
+            # ]  # TODO : This should be recreated at  everytick ?!?!
+            # # TODO : model iterable on rows ?
+            #
+            # view = CDSView(
+            #     source=self.model.source, filters=
+            # )
         return view
+
+    def __getitem__(self, item):
+        # return a view with categorical filter applied !
+        # TODO: is it necessary to recompute every update, or bokeh already takes care of that ?
+        return DataView(
+            model=self.model, filter_column=self.filter_column, category=item
+        )
 
     def table_args(self, **datatable_kwargs):
         self._table_args = datatable_kwargs
@@ -94,7 +138,7 @@ class DataView:  # rename ? "LiveFrameView"
 
         return DataTable(
             source=view.source,
-            view=view,
+            view=view,  # TODO : filter representation ? categories as glyphs ?
             columns=self._table_columns,
             **self._table_args
         )
@@ -109,7 +153,9 @@ class DataView:  # rename ? "LiveFrameView"
         palette = viridis(len(self.model.data.columns))
         color_index = {c: palette[i] for i, c in enumerate(self.model.data.columns)}
 
-        # instantiating view on render
+        # instantiating view on render (must ignore filters in plot)
+        # ERROR:bokeh.core.validation.check:E-1024 (CDSVIEW_FILTERS_WITH_CONNECTED):
+        #  CDSView filters are not compatible with glyphs with connected topology such as Line or Patch
         view = self.bokeh_view(ignore_filters=True)
 
         # by default : lines
@@ -117,9 +163,40 @@ class DataView:  # rename ? "LiveFrameView"
             # CAREFUL : CDSView used by Glyph renderer must have a source that matches the Glyph renderer's data source
             figure.line(
                 source=view.source,
-                view=view,
+                view=view,  # TODO : filter representation ? categories as glyphs ?
                 x="index",
                 y=c,
+                color=color_index[c],
+                legend_label=c,
+            )
+
+        return figure
+
+    def histo_args(self, **figure_kwargs):
+        self._histo_args = figure_kwargs
+
+    @property
+    def histo(self):
+        figure = Figure(**self._histo_args)
+
+        palette = viridis(len(self.model.data.columns))
+        color_index = {c: palette[i] for i, c in enumerate(self.model.data.columns)}
+
+        # instantiating view on render (must ignore filters in plot)
+        # ERROR:bokeh.core.validation.check:E-1024 (CDSVIEW_FILTERS_WITH_CONNECTED):
+        #  CDSView filters are not compatible with glyphs with connected topology such as Line or Patch
+        view = self.bokeh_view()  # ignore_filters=True)
+
+        # by default : lines
+        for c in self.model.data.columns:
+            # CAREFUL : CDSView used by Glyph renderer must have a source that matches the Glyph renderer's data source
+            figure.vbar(
+                source=view.source,
+                view=view,  # TODO : filter representation ? categories as glyphs ?
+                width=view.source.data["index"][1] - view.source.data["index"][0],
+                x="index",
+                bottom=0,
+                top=c,
                 color=color_index[c],
                 legend_label=c,
             )
@@ -150,6 +227,14 @@ async def _internal_example():
         ),
     )
 
+    # we setup a filter based on random2 (only appending, to minimize confusion during plot observation...)
+    filtered_model = random_data_model.relate(
+        lambda df: pandas.cut(
+            df["random2"], bins=[-10, 0, 10], include_lowest=True, labels=["neg", "pos"]
+        ),
+        column="filter",
+    )
+
     # Note : This is "created" before a document output is known and before a request is sent to the server
     view = DataView(model=random_data_model)
     view.plot_args(
@@ -163,12 +248,15 @@ async def _internal_example():
     )
 
     # filtering view on the left
-    fview = DataView(
-        model=random_data_model,
-        filter=
-        # only show when random2 values are positive
-        lambda dt: dt.random2 > 0  # TODO : convert to pandas syntax... somehow
-        # here (dimension -1) we are talking about attributes, not columns...
+    fview = DataView(model=filtered_model, filter_column="filter", category="pos",)
+    fview.histo_args(
+        title="Random Test",
+        plot_height=480,
+        tools="xpan, xwheel_zoom, reset",
+        toolbar_location="left",
+        y_axis_location="right",
+        x_axis_type="datetime",
+        sizing_mode="scale_width",
     )
 
     # Producer as a background task
@@ -220,7 +308,7 @@ def _internal_bokeh(doc, example=None):
             [
                 [  # we want one row with two columns
                     [PreText(text=moduleview)],
-                    [fview.plot, random_data_model.view.table, view.plot],
+                    [fview.histo, random_data_model.view.table, view.plot],
                 ]
             ]
         )
